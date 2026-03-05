@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { PARENT DRIVER ADMIN }
+enum VerificationStatus { PENDING VERIFIED REJECTED SUSPENDED }
+enum InstitutionType { SCHOOL TUITION ACTIVITY }
+enum AssignmentStatus { REQUESTED ACCEPTED REJECTED CANCELLED }
+enum TripType { MORNING AFTERNOON }
+enum TripStatus { ACTIVE ENDED CANCELLED }
+enum StopType { PICKUP DROP SCHOOL }
+enum EventType {
+  DRIVER_10_MIN_TO_PICKUP
+  DRIVER_AT_PICKUP
+  CHILD_BOARDED
+  DRIVER_AT_SCHOOL
+  DRIVER_LEFT_SCHOOL
+  DRIVER_10_MIN_TO_DROP
+  DRIVER_AT_DROP
+  CHILD_DROPPED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  parentProfile ParentProfile?
+  driverProfile DriverProfile?
+  deviceTokens DeviceToken[]
+}
+model ParentProfile {
+  userId String @id
+  name String
+  user User @relation(fields:[userId], references:[id])
+  children Child[]
+}
+model DriverProfile {
+  userId String @id
+  name String
+  photoUrl String?
+  verificationStatus VerificationStatus @default(PENDING)
+  licenseDocUrl String?
+  vehicleRegDocUrl String?
+  idProofUrl String?
+  vehiclePhotoUrl String?
+  serviceArea String?
+  baseLat Float?
+  baseLng Float?
+  user User @relation(fields:[userId], references:[id])
+  vehicle Vehicle?
+  institutions DriverInstitution[]
+  assignments Assignment[]
+  routes RouteTemplate[]
+  locationPings LocationPing[]
+}
+model Vehicle {
+  id String @id @default(cuid())
+  driverId String @unique
+  makeModel String
+  plateNumber String?
+  seatsCapacity Int
+  color String?
+  driver DriverProfile @relation(fields:[driverId], references:[userId])
+}
+model Institution {
+  id String @id @default(cuid())
+  name String
+  type InstitutionType
+  address String
+  lat Float
+  lng Float
+  children Child[]
+  drivers DriverInstitution[]
+  routes RouteTemplate[]
+}
+model Child {
+  id String @id @default(cuid())
+  parentId String
+  name String
+  institutionId String
+  pickupAddress String
+  pickupLat Float
+  pickupLng Float
+  dropAddress String
+  dropLat Float
+  dropLng Float
+  emergencyPhone String
+  parent ParentProfile @relation(fields:[parentId], references:[userId])
+  institution Institution @relation(fields:[institutionId], references:[id])
+  assignments Assignment[]
+  tripStops TripStop[]
+  events TripEvent[]
+}
+model DriverInstitution {
+  driverId String
+  institutionId String
+  driver DriverProfile @relation(fields:[driverId], references:[userId])
+  institution Institution @relation(fields:[institutionId], references:[id])
+  @@id([driverId, institutionId])
+}
+model Assignment {
+  id String @id @default(cuid())
+  childId String
+  driverId String
+  status AssignmentStatus @default(REQUESTED)
+  startDate DateTime
+  child Child @relation(fields:[childId], references:[id])
+  driver DriverProfile @relation(fields:[driverId], references:[userId])
+}
+model RouteTemplate {
+  id String @id @default(cuid())
+  driverId String
+  institutionId String
+  tripType TripType
+  driver DriverProfile @relation(fields:[driverId], references:[userId])
+  institution Institution @relation(fields:[institutionId], references:[id])
+  trips Trip[]
+}
+model Trip {
+  id String @id @default(cuid())
+  routeTemplateId String
+  date DateTime
+  tripType TripType
+  status TripStatus @default(ACTIVE)
+  startedAt DateTime @default(now())
+  endedAt DateTime?
+  routeTemplate RouteTemplate @relation(fields:[routeTemplateId], references:[id])
+  stops TripStop[]
+  events TripEvent[]
+  pings LocationPing[]
+}
+model TripStop {
+  id String @id @default(cuid())
+  tripId String
+  stopType StopType
+  childId String?
+  lat Float
+  lng Float
+  address String
+  sequenceIndex Int
+  trip Trip @relation(fields:[tripId], references:[id])
+  child Child? @relation(fields:[childId], references:[id])
+}
+model TripEvent {
+  id String @id @default(cuid())
+  tripId String
+  childId String
+  eventType EventType
+  timestamp DateTime @default(now())
+  metadata Json?
+  trip Trip @relation(fields:[tripId], references:[id])
+  child Child @relation(fields:[childId], references:[id])
+  @@unique([tripId, childId, eventType])
+}
+model LocationPing {
+  id String @id @default(cuid())
+  tripId String?
+  driverId String
+  lat Float
+  lng Float
+  timestamp DateTime @default(now())
+  trip Trip? @relation(fields:[tripId], references:[id])
+  driver DriverProfile @relation(fields:[driverId], references:[userId])
+}
+model DeviceToken {
+  id String @id @default(cuid())
+  userId String
+  token String @unique
+  platform String
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user User @relation(fields:[userId], references:[id])
+}

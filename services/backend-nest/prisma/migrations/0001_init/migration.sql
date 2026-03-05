@@ -1,0 +1,1 @@
+-- Run `npx prisma migrate dev` to generate SQL in local environment.

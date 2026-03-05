@@ -1,0 +1,13 @@
+{
+  "name": "ashwa",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run -ws build",
+    "dev": "npm run -ws dev"
+  }
+}
