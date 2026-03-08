@@ -167,3 +167,97 @@ export type AuthUser = {
 export type ApiResult<T> = {
   data: T;
 };
+
+export type DriverTrustSummary = {
+  verificationStatus: z.infer<typeof VerificationStatusSchema>;
+  isDocumentationComplete: boolean;
+  isServiceConfigured: boolean;
+  isServiceReady: boolean;
+  isParentVisible: boolean;
+  missingItems: string[];
+  nextAdminAction: string;
+};
+
+export type DriverServiceSummary = {
+  id: string;
+  name: string;
+  email: string;
+  verificationStatus: z.infer<typeof VerificationStatusSchema>;
+  serviceArea: string | null;
+  trust: DriverTrustSummary;
+  vehicle: {
+    makeModel: string | null;
+    plateNumber: string | null;
+    seatsCapacity: number | null;
+    color: string | null;
+  } | null;
+  institutions: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
+};
+
+export type ChildSummary = {
+  id: string;
+  name: string;
+  institutionId: string;
+  institutionName: string | null;
+  pickupAddress: string;
+  dropAddress: string;
+};
+
+export type AssignmentSummary = {
+  id: string;
+  status: string;
+  startDate: string;
+  child: ChildSummary;
+  driver: DriverServiceSummary | null;
+};
+
+export type CurrentAssignmentState = {
+  role: 'PARENT' | 'DRIVER';
+  primary: AssignmentSummary | null;
+  items: AssignmentSummary[];
+};
+
+export type TripLocationSummary = {
+  lat: number;
+  lng: number;
+  timestamp: string;
+} | null;
+
+export type TripStopSummary = {
+  id: string;
+  stopType: string;
+  childId: string | null;
+  childName: string | null;
+  address: string;
+  lat: number;
+  lng: number;
+  sequenceIndex: number;
+};
+
+export type TimelineEventSummary = {
+  id: string;
+  childId: string;
+  childName: string;
+  eventType: EventType;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type CurrentTripState = {
+  trip: {
+    id: string;
+    tripType: TripType;
+    status: string;
+    startedAt: string;
+    endedAt: string | null;
+  } | null;
+  latestLocation: TripLocationSummary;
+  nextStop: TripStopSummary | null;
+  stops: TripStopSummary[];
+  manifest: ChildSummary[];
+  timeline: TimelineEventSummary[];
+};

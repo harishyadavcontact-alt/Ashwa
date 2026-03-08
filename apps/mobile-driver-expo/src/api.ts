@@ -1,3 +1,4 @@
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
 type RequestOptions = {
@@ -27,17 +28,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export const api = {
   login: (email: string, password: string) =>
     request<{ accessToken: string }>('/auth/login', { method: 'POST', body: { email, password } }),
-  currentAssignments: (token: string) => request<any[]>('/assignments/current', { token }),
-  incomingAssignments: (token: string) => request<any[]>('/assignments/incoming', { token }),
-  meSummary: (token: string) => request<any>('/drivers/me/summary', { token }),
+  currentAssignments: (token: string) => request<CurrentAssignmentState>('/assignments/current', { token }),
+  incomingAssignments: (token: string) => request<CurrentAssignmentState>('/assignments/incoming', { token }),
+  meSummary: (token: string) => request<DriverServiceSummary>('/drivers/me/summary', { token }),
   onboard: (token: string, body: Record<string, unknown>) =>
     request('/drivers/onboard', { method: 'POST', token, body }),
   acceptAssignment: (token: string, id: string) => request(`/assignments/${id}/accept`, { method: 'POST', token }),
   rejectAssignment: (token: string, id: string) => request(`/assignments/${id}/reject`, { method: 'POST', token }),
   saveProfile: (token: string, body: Record<string, unknown>) => request('/drivers/profile', { method: 'PATCH', token, body }),
   saveServiceInfo: (token: string, body: Record<string, unknown>) => request('/drivers/service-info', { method: 'POST', token, body }),
-  currentTrip: (token: string) => request<any>('/trips/current', { token }),
-  startTrip: (token: string, tripType: 'MORNING' | 'AFTERNOON') => request<any>('/trips/start', { method: 'POST', token, body: { tripType } }),
+  currentTrip: (token: string) => request<CurrentTripState>('/trips/current', { token }),
+  startTrip: (token: string, tripType: 'MORNING' | 'AFTERNOON') =>
+    request<CurrentTripState>('/trips/start', { method: 'POST', token, body: { tripType } }),
   endTrip: (token: string, id: string) => request(`/trips/${id}/end`, { method: 'POST', token }),
   ping: (token: string, tripId: string, lat: number, lng: number) =>
     request('/tracking/ping', { method: 'POST', token, body: { tripId, lat, lng } }),

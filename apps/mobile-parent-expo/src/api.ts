@@ -1,3 +1,9 @@
+import type {
+  CurrentAssignmentState,
+  CurrentTripState,
+  DriverServiceSummary,
+  TimelineEventSummary,
+} from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
 type RequestOptions = {
@@ -34,11 +40,12 @@ export const api = {
   createChild: (token: string, body: Record<string, unknown>) =>
     request('/children', { method: 'POST', token, body }),
   listInstitutions: () => request<any[]>('/institutions'),
-  searchDrivers: (params: URLSearchParams) => request<any[]>(`/drivers/search?${params.toString()}`),
-  driverSummary: (id: string) => request<any>(`/drivers/${id}/summary`),
+  searchDrivers: (params: URLSearchParams) => request<DriverServiceSummary[]>(`/drivers/search?${params.toString()}`),
+  driverSummary: (id: string) => request<DriverServiceSummary>(`/drivers/${id}/summary`),
   requestAssignment: (token: string, body: Record<string, unknown>) =>
     request('/assignments/request', { method: 'POST', token, body }),
-  currentAssignment: (token: string) => request<any>('/assignments/current', { token }),
-  currentTrip: (token: string) => request<any>('/trips/current', { token }),
-  tripEvents: (token: string, tripId: string) => request<any[]>(`/events?tripId=${tripId}`, { token }),
+  currentAssignment: (token: string) => request<CurrentAssignmentState>('/assignments/current', { token }),
+  currentTrip: (token: string) => request<CurrentTripState>('/trips/current', { token }),
+  tripTimeline: (token: string, tripId: string) =>
+    request<{ tripId: string; timeline: TimelineEventSummary[] }>(`/trips/${tripId}/timeline`, { token }),
 };

@@ -19,6 +19,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { summarizeDriverTrust } from '../drivers/driver-trust';
+import { presentTripState } from '../current-state/presenters';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('trips')
@@ -45,11 +46,15 @@ export class TripsController {
         routeTemplate: { driverId: req.user.userId },
         tripType: body.tripType,
       },
-      include: { stops: true, events: true },
+      include: {
+        stops: { include: { child: true } },
+        events: { include: { child: true } },
+        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
+      },
       orderBy: { startedAt: 'desc' },
     });
     if (activeTrip) {
-      return activeTrip;
+      return presentTripState(activeTrip);
     }
 
     const assignments = await this.prisma.assignment.findMany({
@@ -114,7 +119,15 @@ export class TripsController {
       data: stops.map((s, i) => ({ ...s, stopType: s.stopType as any, tripId: trip.id, sequenceIndex: i })),
     });
     this.logger.log(`trip start: ${trip.id}`);
-    return this.prisma.trip.findUnique({ where: { id: trip.id }, include: { stops: true, events: true } });
+    const currentTrip = await this.prisma.trip.findUnique({
+      where: { id: trip.id },
+      include: {
+        stops: { include: { child: true } },
+        events: { include: { child: true } },
+        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
+      },
+    });
+    return presentTripState(currentTrip);
   }
 
   @Roles('DRIVER')
@@ -136,28 +149,76 @@ export class TripsController {
   }
 
   @Get('current')
-  current(@Req() req: any, @Query('tripType') tripType?: 'MORNING' | 'AFTERNOON') {
+  async current(@Req() req: any, @Query('tripType') tripType?: 'MORNING' | 'AFTERNOON') {
     if (req.user.role === 'DRIVER') {
-      return this.prisma.trip.findFirst({
+      const trip = await this.prisma.trip.findFirst({
         where: {
           routeTemplate: { driverId: req.user.userId },
           ...(tripType ? { tripType } : {}),
           status: 'ACTIVE',
         },
-        include: { stops: true, events: true, pings: { orderBy: { timestamp: 'desc' }, take: 1 } },
+        include: {
+          stops: { include: { child: true } },
+          events: { include: { child: true } },
+          pings: { orderBy: { timestamp: 'desc' }, take: 1 },
+        },
         orderBy: { startedAt: 'desc' },
       });
+      return presentTripState(trip);
     }
 
-    return this.prisma.trip.findFirst({
+    const visibleChildren = await this.prisma.child.findMany({
+      where: { parentId: req.user.userId },
+      select: { id: true },
+    });
+    const trip = await this.prisma.trip.findFirst({
       where: {
         status: 'ACTIVE',
         stops: { some: { child: { parentId: req.user.userId } } },
         ...(tripType ? { tripType } : {}),
       },
-      include: { stops: true, events: true, pings: { orderBy: { timestamp: 'desc' }, take: 1 } },
+      include: {
+        stops: { include: { child: true } },
+        events: { include: { child: true } },
+        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
+      },
       orderBy: { startedAt: 'desc' },
     });
+    return presentTripState(trip, visibleChildren.map((child) => child.id));
+  }
+
+  @Get(':id/timeline')
+  async timeline(@Req() req: any, @Param('id') id: string) {
+    const trip = await this.prisma.trip.findFirst({
+      where:
+        req.user.role === 'DRIVER'
+          ? { id, routeTemplate: { driverId: req.user.userId } }
+          : { id, stops: { some: { child: { parentId: req.user.userId } } } },
+      include: {
+        stops: { include: { child: true } },
+        events: { include: { child: true } },
+        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
+      },
+    });
+    if (!trip) {
+      throw new NotFoundException('Trip not found');
+    }
+
+    const visibleChildren =
+      req.user.role === 'PARENT'
+        ? (
+            await this.prisma.child.findMany({
+              where: { parentId: req.user.userId },
+              select: { id: true },
+            })
+          ).map((child) => child.id)
+        : undefined;
+
+    const state = presentTripState(trip, visibleChildren);
+    return {
+      tripId: state.trip?.id || id,
+      timeline: state.timeline,
+    };
   }
 
   @Get('today')

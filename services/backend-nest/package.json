@@ -7,7 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test dist-test/shared-contracts.spec.js dist-test/driver-trust.spec.js",
+    "test": "node --test dist-test/test/shared-contracts.spec.js dist-test/test/driver-trust.spec.js dist-test/test/current-state-presenters.spec.js",
     "test:build": "tsc -p tsconfig.test.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",

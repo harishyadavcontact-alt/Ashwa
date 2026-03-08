@@ -1,3 +1,4 @@
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, TimelineEventSummary } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -29,11 +30,11 @@ export default function App() {
   const [password, setPassword] = useState('Password123');
   const [children, setChildren] = useState<any[]>([]);
   const [institutions, setInstitutions] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
-  const [assignment, setAssignment] = useState<any | null>(null);
-  const [trip, setTrip] = useState<any | null>(null);
-  const [events, setEvents] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<DriverServiceSummary[]>([]);
+  const [selectedDriver, setSelectedDriver] = useState<DriverServiceSummary | null>(null);
+  const [assignmentState, setAssignmentState] = useState<CurrentAssignmentState | null>(null);
+  const [tripState, setTripState] = useState<CurrentTripState | null>(null);
+  const [events, setEvents] = useState<TimelineEventSummary[]>([]);
   const [driverLoc, setDriverLoc] = useState({ latitude: 12.97, longitude: 77.59 });
   const [childDraft, setChildDraft] = useState({
     name: '',
@@ -48,6 +49,9 @@ export default function App() {
   });
   const [status, setStatus] = useState('Sign in to see trip readiness, trust state, and next action.');
   const [loading, setLoading] = useState(false);
+
+  const assignment = assignmentState?.primary || null;
+  const trip = tripState?.trip || null;
 
   useEffect(() => {
     AsyncStorage.getItem(SESSION_KEY).then((value) => {
@@ -72,25 +76,35 @@ export default function App() {
 
   useEffect(() => {
     if (!token || !trip?.id) return;
-    api.tripEvents(token, trip.id).then(setEvents).catch(() => undefined);
+    api
+      .tripTimeline(token, trip.id)
+      .then((result) => setEvents(result.timeline))
+      .catch(() => undefined);
     const socket = io(`${API_BASE_URL}/ws`, { auth: { token } });
-    socket.emit('subscribe', { tripId: trip.id, driverId: assignment?.driverId });
+    socket.emit('subscribe', { tripId: trip.id, driverId: assignment?.driver?.id });
     socket.on('location', (payload: any) => {
       setDriverLoc({ latitude: payload.lat, longitude: payload.lng });
     });
     return () => socket.close();
-  }, [assignment?.driverId, token, trip?.id]);
+  }, [assignment?.driver?.id, token, trip?.id]);
 
   async function refreshHome() {
     try {
-      const [childrenData, assignmentData, tripData] = await Promise.all([
+      const [childrenData, assignmentData, nextTripState] = await Promise.all([
         api.listChildren(token),
         api.currentAssignment(token),
         api.currentTrip(token),
       ]);
       setChildren(childrenData);
-      setAssignment(assignmentData);
-      setTrip(tripData);
+      setAssignmentState(assignmentData);
+      setTripState(nextTripState);
+      setEvents(nextTripState.timeline || []);
+      if (nextTripState.latestLocation) {
+        setDriverLoc({
+          latitude: nextTripState.latestLocation.lat,
+          longitude: nextTripState.latestLocation.lng,
+        });
+      }
     } catch (error: any) {
       setStatus(error.message || 'Unable to refresh current state.');
     }
@@ -180,7 +194,7 @@ export default function App() {
     try {
       await api.requestAssignment(token, {
         childId: children[0].id,
-        driverId: selectedDriver.userId,
+        driverId: selectedDriver.id,
         startDate: new Date().toISOString(),
       });
       await refreshHome();
@@ -197,10 +211,11 @@ export default function App() {
     await AsyncStorage.removeItem(SESSION_KEY);
     setToken('');
     setScreen('auth');
-    setAssignment(null);
-    setTrip(null);
+    setAssignmentState(null);
+    setTripState(null);
     setChildren([]);
     setDrivers([]);
+    setEvents([]);
   }
 
   const childStatus = useMemo(() => {
@@ -216,7 +231,9 @@ export default function App() {
         <View style={styles.hero}>
           <Text style={styles.kicker}>Ashwa Parent</Text>
           <Text style={styles.titleLight}>See what matters now.</Text>
-          <Text style={styles.bodyLight}>Child state, driver trust, and trip readiness stay visible without hunting through menus.</Text>
+          <Text style={styles.bodyLight}>
+            Child state, driver trust, and trip readiness stay visible without hunting through menus.
+          </Text>
         </View>
         <View style={styles.card}>
           <TextInput value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} autoCapitalize="none" />
@@ -257,27 +274,27 @@ export default function App() {
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           {selectedDriver ? (
             <View style={styles.cardInline}>
-              <Text style={styles.cardTitle}>{selectedDriver.name || selectedDriver.user?.email}</Text>
+              <Text style={styles.cardTitle}>{selectedDriver.name}</Text>
               <Text style={styles.metric}>Verification: {selectedDriver.verificationStatus}</Text>
-              <Text style={styles.metric}>Readiness: {selectedDriver.trust?.isServiceReady ? 'Ready for parent requests' : 'Needs review'}</Text>
+              <Text style={styles.metric}>Readiness: {selectedDriver.trust.isServiceReady ? 'Ready for parent requests' : 'Needs review'}</Text>
               <Text style={styles.metric}>Vehicle: {selectedDriver.vehicle?.makeModel || 'Not added yet'}</Text>
               <Text style={styles.metric}>Seats: {selectedDriver.vehicle?.seatsCapacity || 'Unknown'}</Text>
-              <Text style={styles.metric}>Missing: {(selectedDriver.trust?.missingItems || []).join(', ') || 'None'}</Text>
+              <Text style={styles.metric}>Missing: {selectedDriver.trust.missingItems.join(', ') || 'None'}</Text>
               <Button title="Request seat" onPress={requestAssignment} />
             </View>
           ) : null}
           <FlatList
             data={drivers}
-            keyExtractor={(item) => item.userId}
+            keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={styles.listRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.name || item.user?.email}</Text>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
                   <Text style={styles.metric}>
-                    {item.verificationStatus} | {item.trust?.isServiceReady ? 'Ready' : 'Needs review'} | {item.vehicle?.makeModel || 'Vehicle pending'}
+                    {item.verificationStatus} | {item.trust.isServiceReady ? 'Ready' : 'Needs review'} | {item.vehicle?.makeModel || 'Vehicle pending'}
                   </Text>
                 </View>
-                <Button title="Inspect" onPress={() => inspectDriver(item.userId)} />
+                <Button title="Inspect" onPress={() => inspectDriver(item.id)} />
               </View>
             )}
           />
@@ -292,7 +309,8 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <View style={styles.stack}>
           <Text style={styles.titleDark}>Trip tracking</Text>
-          <Text style={styles.bodyDark}>{trip ? `Current trip: ${trip.tripType} • ${trip.status}` : 'No active trip yet'}</Text>
+          <Text style={styles.bodyDark}>{trip ? `Current trip: ${trip.tripType} | ${trip.status}` : 'No active trip yet'}</Text>
+          <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
         </View>
         <MapView style={styles.map} initialRegion={{ ...driverLoc, latitudeDelta: 0.05, longitudeDelta: 0.05 }} region={{ ...driverLoc, latitudeDelta: 0.05, longitudeDelta: 0.05 }}>
           <Marker coordinate={driverLoc} title="Driver" />
@@ -318,13 +336,14 @@ export default function App() {
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Assigned driver</Text>
-          <Text style={styles.metric}>{assignment?.driver?.name || assignment?.driver?.user?.email || 'No accepted driver yet'}</Text>
+          <Text style={styles.metric}>{assignment?.driver?.name || 'No accepted driver yet'}</Text>
           <Text style={styles.metric}>Trust state: {assignment?.driver?.verificationStatus || 'Unknown'}</Text>
           <Text style={styles.metric}>Service readiness: {assignment?.driver?.trust?.isServiceReady ? 'Ready' : 'Not ready'}</Text>
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Trip readiness</Text>
           <Text style={styles.metric}>{trip ? `${trip.tripType} trip is ${trip.status}` : 'No active trip'}</Text>
+          <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
           <Text style={styles.metric}>{children.length} child profile(s) on file</Text>
         </View>
         <View style={styles.actions}>

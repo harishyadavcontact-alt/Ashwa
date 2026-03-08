@@ -92,6 +92,7 @@ ashwa/
 - `POST /trips/start`
 - `POST /trips/:id/end`
 - `GET /trips/current`
+- `GET /trips/:id/timeline`
 - `GET /trips/today`
 - `POST /tracking/ping`
 - `POST /trips/:id/event`
@@ -105,6 +106,7 @@ ashwa/
 - Backend requests are validated against shared contracts in `packages/shared`.
 - Tracking subscriptions require auth and are scoped to real trip or driver access.
 - Driver trust readiness is enforced before parents can request a driver or drivers can start trips.
+- Current assignment, trip, timeline, and driver summary APIs now return normalized app-facing state instead of raw relation-heavy payloads.
 - Parent and driver apps are now structured app shells instead of single-file demos, but they still need the full product backlog from Linear to reach pilot-complete depth.
 - CI validates install, Prisma generation, build, typecheck, and tests on pushes and pull requests.
 - Pilot operations docs live in [docs/release-checklist.md](/E:/Ashwa/docs/release-checklist.md) and [docs/pilot-launch-runbook.md](/E:/Ashwa/docs/pilot-launch-runbook.md).

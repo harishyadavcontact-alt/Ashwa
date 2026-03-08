@@ -17,6 +17,7 @@ import { Roles } from '../common/roles.decorator';
 import { CurrentUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { summarizeDriverTrust } from '../drivers/driver-trust';
+import { presentAssignmentState } from '../current-state/presenters';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('assignments')
@@ -52,38 +53,38 @@ export class AssignmentsController {
 
   @Roles('DRIVER')
   @Get('incoming')
-  incoming(@CurrentUser() user: AuthUser) {
-    return this.prisma.assignment.findMany({
+  async incoming(@CurrentUser() user: AuthUser) {
+    const assignments = await this.prisma.assignment.findMany({
       where: { driverId: user.userId, status: 'REQUESTED' },
-      include: { child: true },
+      include: { child: { include: { institution: true } }, driver: { include: { vehicle: true, user: true, institutions: { include: { institution: true } } } } },
     });
+    return presentAssignmentState('DRIVER', assignments);
   }
 
   @Roles('PARENT', 'DRIVER')
   @Get('current')
   async current(@CurrentUser() user: AuthUser) {
     if (user.role === 'PARENT') {
-      const assignment = await this.prisma.assignment.findFirst({
+      const assignments = await this.prisma.assignment.findMany({
         where: { child: { parentId: user.userId }, status: 'ACCEPTED' },
-        include: { child: true, driver: { include: { vehicle: true, user: true, institutions: true } } },
+        include: {
+          child: { include: { institution: true } },
+          driver: { include: { vehicle: true, user: true, institutions: { include: { institution: true } } } },
+        },
         orderBy: { startDate: 'desc' },
       });
-      return assignment
-        ? {
-            ...assignment,
-            driver: {
-              ...assignment.driver,
-              trust: summarizeDriverTrust(assignment.driver as any),
-            },
-          }
-        : null;
+      return presentAssignmentState('PARENT', assignments);
     }
 
-    return this.prisma.assignment.findMany({
+    const assignments = await this.prisma.assignment.findMany({
       where: { driverId: user.userId, status: 'ACCEPTED' },
-      include: { child: true },
+      include: {
+        child: { include: { institution: true } },
+        driver: { include: { vehicle: true, user: true, institutions: { include: { institution: true } } } },
+      },
       orderBy: { startDate: 'desc' },
     });
+    return presentAssignmentState('DRIVER', assignments);
   }
 
   @Roles('DRIVER')

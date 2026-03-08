@@ -10,7 +10,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { PrismaService } from '../prisma.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { summarizeDriverTrust } from './driver-trust';
+import { presentDriverSummary } from '../current-state/presenters';
 
 @Controller('drivers')
 export class DriversController {
@@ -69,14 +69,14 @@ export class DriversController {
       include: { vehicle: true, user: true, institutions: { include: { institution: true } } },
     });
     return drivers
-      .map((driver) => ({ ...driver, trust: summarizeDriverTrust(driver as any) }))
-      .filter((driver) => driver.trust.isParentVisible)
+      .filter((driver) => presentDriverSummary(driver).trust.isParentVisible)
       .filter((driver) => {
         if (!driver.baseLat || !driver.baseLng) return true;
         const dx = driver.baseLat - lat;
         const dy = driver.baseLng - lng;
         return Math.sqrt(dx * dx + dy * dy) < radiusKm / 111;
-      });
+      })
+      .map((driver) => presentDriverSummary(driver));
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -87,7 +87,7 @@ export class DriversController {
       where: { userId: req.user.userId },
       include: { vehicle: true, institutions: { include: { institution: true } }, user: true },
     });
-    return driver ? { ...driver, trust: summarizeDriverTrust(driver as any) } : null;
+    return driver ? presentDriverSummary(driver) : null;
   }
 
   @Get(':id/summary')
@@ -96,6 +96,6 @@ export class DriversController {
       where: { userId: id },
       include: { vehicle: true, institutions: { include: { institution: true } }, user: true },
     });
-    return driver ? { ...driver, trust: summarizeDriverTrust(driver as any) } : null;
+    return driver ? presentDriverSummary(driver) : null;
   }
 }

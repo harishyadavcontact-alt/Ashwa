@@ -4,6 +4,10 @@
     "module": "esnext",
     "jsx": "react-jsx",
     "strict": false,
+    "baseUrl": ".",
+    "paths": {
+      "@ashwa/shared": ["../../packages/shared/src/index.ts"]
+    },
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,

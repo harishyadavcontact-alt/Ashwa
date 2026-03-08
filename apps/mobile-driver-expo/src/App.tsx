@@ -1,3 +1,4 @@
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -24,10 +25,10 @@ export default function App() {
   const [token, setToken] = useState('');
   const [email, setEmail] = useState('driver@ashwa.app');
   const [password, setPassword] = useState('Password123');
-  const [incoming, setIncoming] = useState<any[]>([]);
-  const [accepted, setAccepted] = useState<any[]>([]);
-  const [trip, setTrip] = useState<any | null>(null);
-  const [driverSummary, setDriverSummary] = useState<any | null>(null);
+  const [incomingState, setIncomingState] = useState<CurrentAssignmentState | null>(null);
+  const [assignmentState, setAssignmentState] = useState<CurrentAssignmentState | null>(null);
+  const [tripState, setTripState] = useState<CurrentTripState | null>(null);
+  const [driverSummary, setDriverSummary] = useState<DriverServiceSummary | null>(null);
   const [profile, setProfile] = useState({
     name: 'Ashwa Driver',
     serviceArea: 'South Bengaluru',
@@ -43,6 +44,10 @@ export default function App() {
   const [selectedChildId, setSelectedChildId] = useState('');
   const [status, setStatus] = useState('Sign in to see the next operational action.');
   const [loading, setLoading] = useState(false);
+
+  const incoming = incomingState?.items || [];
+  const accepted = assignmentState?.items || [];
+  const trip = tripState?.trip || null;
 
   useEffect(() => {
     AsyncStorage.getItem(SESSION_KEY).then((value) => {
@@ -66,18 +71,17 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [incomingAssignments, activeAssignments, currentTrip, summary] = await Promise.all([
+      const [nextIncomingState, nextAssignmentState, nextTripState, summary] = await Promise.all([
         api.incomingAssignments(token),
         api.currentAssignments(token),
         api.currentTrip(token),
         api.meSummary(token),
       ]);
-      setIncoming(incomingAssignments);
-      setAccepted(Array.isArray(activeAssignments) ? activeAssignments : []);
-      setTrip(currentTrip);
+      setIncomingState(nextIncomingState);
+      setAssignmentState(nextAssignmentState);
+      setTripState(nextTripState);
       setDriverSummary(summary);
-      const firstChildStop = currentTrip?.stops?.find((stop: any) => !!stop.childId);
-      setSelectedChildId(firstChildStop?.childId || '');
+      setSelectedChildId(nextTripState.nextStop?.childId || nextTripState.manifest[0]?.id || '');
     } catch (error: any) {
       setStatus(error.message || 'Could not refresh driver state.');
     }
@@ -153,9 +157,8 @@ export default function App() {
     setLoading(true);
     try {
       const current = await api.startTrip(token, 'MORNING');
-      setTrip(current);
-      const firstChildStop = current?.stops?.find((stop: any) => !!stop.childId);
-      setSelectedChildId(firstChildStop?.childId || '');
+      setTripState(current);
+      setSelectedChildId(current.nextStop?.childId || current.manifest[0]?.id || '');
       setScreen('trip');
       setStatus('Trip started. Next action is visible below.');
     } catch (error: any) {
@@ -186,6 +189,7 @@ export default function App() {
       const loc = await Location.getCurrentPositionAsync({});
       await api.ping(token, trip.id, loc.coords.latitude, loc.coords.longitude);
       setStatus('Location ping sent for the active trip.');
+      await refresh();
     } catch (error: any) {
       setStatus(error.message || 'Could not send location ping.');
     } finally {
@@ -214,9 +218,9 @@ export default function App() {
     await AsyncStorage.removeItem(SESSION_KEY);
     setToken('');
     setScreen('auth');
-    setTrip(null);
-    setIncoming([]);
-    setAccepted([]);
+    setIncomingState(null);
+    setAssignmentState(null);
+    setTripState(null);
     setDriverSummary(null);
   }
 
@@ -233,25 +237,11 @@ export default function App() {
         <View style={styles.hero}>
           <Text style={styles.kicker}>Ashwa Driver</Text>
           <Text style={styles.titleLight}>Operate, do not improvise.</Text>
-          <Text style={styles.bodyLight}>
-            The screen should always tell the driver the next correct action.
-          </Text>
+          <Text style={styles.bodyLight}>The screen should always tell the driver the next correct action.</Text>
         </View>
         <View style={styles.card}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Email"
-            style={styles.input}
-            autoCapitalize="none"
-          />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Password"
-            style={styles.input}
-            secureTextEntry
-          />
+          <TextInput value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} autoCapitalize="none" />
+          <TextInput value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} secureTextEntry />
           <Button title={loading ? 'Signing in...' : 'Sign in'} onPress={login} disabled={loading} />
           <Text style={styles.status}>{status}</Text>
         </View>
@@ -264,57 +254,20 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Service setup</Text>
-          <Text style={styles.bodyDark}>
-            Complete the operational profile once so trust state and matching remain explicit.
-          </Text>
+          <Text style={styles.bodyDark}>Complete the operational profile once so trust state and matching remain explicit.</Text>
           <View style={styles.cardInline}>
             <Text style={styles.cardTitle}>Verification status</Text>
             <Text style={styles.metric}>{driverSummary?.verificationStatus || 'PENDING'}</Text>
-            <Text style={styles.metric}>
-              Readiness: {driverSummary?.trust?.isServiceReady ? 'Ready for trips' : 'Needs action'}
-            </Text>
-            <Text style={styles.metric}>
-              Missing: {(driverSummary?.trust?.missingItems || []).join(', ') || 'None'}
-            </Text>
+            <Text style={styles.metric}>Readiness: {driverSummary?.trust?.isServiceReady ? 'Ready for trips' : 'Needs action'}</Text>
+            <Text style={styles.metric}>Missing: {(driverSummary?.trust?.missingItems || []).join(', ') || 'None'}</Text>
           </View>
           <View style={styles.cardInline}>
-            <TextInput
-              value={profile.name}
-              onChangeText={(value) => setProfile({ ...profile, name: value })}
-              placeholder="Driver name"
-              style={styles.input}
-            />
-            <TextInput
-              value={profile.serviceArea}
-              onChangeText={(value) => setProfile({ ...profile, serviceArea: value })}
-              placeholder="Service area"
-              style={styles.input}
-            />
-            <TextInput
-              value={serviceInfo.institutionIds}
-              onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })}
-              placeholder="Institution ids (comma-separated)"
-              style={styles.input}
-            />
-            <TextInput
-              value={serviceInfo.makeModel}
-              onChangeText={(value) => setServiceInfo({ ...serviceInfo, makeModel: value })}
-              placeholder="Vehicle"
-              style={styles.input}
-            />
-            <TextInput
-              value={serviceInfo.seatsCapacity}
-              onChangeText={(value) => setServiceInfo({ ...serviceInfo, seatsCapacity: value })}
-              placeholder="Seats"
-              style={styles.input}
-              keyboardType="number-pad"
-            />
-            <TextInput
-              value={serviceInfo.plateNumber}
-              onChangeText={(value) => setServiceInfo({ ...serviceInfo, plateNumber: value })}
-              placeholder="Plate number"
-              style={styles.input}
-            />
+            <TextInput value={profile.name} onChangeText={(value) => setProfile({ ...profile, name: value })} placeholder="Driver name" style={styles.input} />
+            <TextInput value={profile.serviceArea} onChangeText={(value) => setProfile({ ...profile, serviceArea: value })} placeholder="Service area" style={styles.input} />
+            <TextInput value={serviceInfo.institutionIds} onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })} placeholder="Institution ids (comma-separated)" style={styles.input} />
+            <TextInput value={serviceInfo.makeModel} onChangeText={(value) => setServiceInfo({ ...serviceInfo, makeModel: value })} placeholder="Vehicle" style={styles.input} />
+            <TextInput value={serviceInfo.seatsCapacity} onChangeText={(value) => setServiceInfo({ ...serviceInfo, seatsCapacity: value })} placeholder="Seats" style={styles.input} keyboardType="number-pad" />
+            <TextInput value={serviceInfo.plateNumber} onChangeText={(value) => setServiceInfo({ ...serviceInfo, plateNumber: value })} placeholder="Plate number" style={styles.input} />
             <Button title="Save onboarding" onPress={saveOnboarding} />
           </View>
           <Button title="Skip to inbox" onPress={() => setScreen('inbox')} />
@@ -328,9 +281,7 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Incoming requests</Text>
-          <Text style={styles.bodyDark}>
-            Accept only when seat capacity, institution fit, and route reality line up.
-          </Text>
+          <Text style={styles.bodyDark}>Accept only when seat capacity, institution fit, and route reality line up.</Text>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           <FlatList
             data={incoming}
@@ -363,22 +314,19 @@ export default function App() {
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Current trip</Text>
           <Text style={styles.metric}>{trip ? `${trip.tripType} | ${trip.status}` : 'No active trip'}</Text>
+          <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
           <Text style={styles.metric}>Accepted families: {accepted.length}</Text>
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Trust and readiness</Text>
           <Text style={styles.metric}>Verification: {driverSummary?.verificationStatus || 'Unknown'}</Text>
-          <Text style={styles.metric}>
-            Service readiness: {driverSummary?.trust?.isServiceReady ? 'Ready' : 'Not ready'}
-          </Text>
-          <Text style={styles.metric}>
-            Next admin action: {driverSummary?.trust?.nextAdminAction || 'Review profile'}
-          </Text>
+          <Text style={styles.metric}>Service readiness: {driverSummary?.trust?.isServiceReady ? 'Ready' : 'Not ready'}</Text>
+          <Text style={styles.metric}>Next admin action: {driverSummary?.trust?.nextAdminAction || 'Review profile'}</Text>
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Manifest and stop focus</Text>
-          {(trip?.stops || []).filter((stop: any) => !!stop.childId).map((stop: any) => (
-            <Button key={stop.id} title={`Focus ${stop.address}`} onPress={() => setSelectedChildId(stop.childId)} />
+          {tripState?.manifest.map((child) => (
+            <Button key={child.id} title={`Focus ${child.name}`} onPress={() => setSelectedChildId(child.id)} />
           ))}
           <Text style={styles.metric}>Selected child stop: {selectedChildId || 'None selected'}</Text>
         </View>
