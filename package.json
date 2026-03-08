@@ -7,7 +7,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run -ws build",
-    "dev": "npm run -ws dev"
+    "bootstrap": "npm install && npm run prisma:generate",
+    "build": "npm run build --workspace @ashwa/shared && npm run build --workspace backend-nest",
+    "dev": "npm run dev --workspace backend-nest",
+    "typecheck": "npm run typecheck --workspace @ashwa/shared && npm run typecheck --workspace backend-nest",
+    "test": "npm run build --workspace @ashwa/shared && npm run test:build --workspace backend-nest && npm run test --workspace backend-nest",
+    "prisma:generate": "npm run prisma:generate --workspace backend-nest"
   }
 }

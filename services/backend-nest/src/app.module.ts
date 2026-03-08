@@ -10,8 +10,22 @@ import { TrackingModule } from './tracking/tracking.module';
 import { EventsModule } from './events/events.module';
 import { AdminModule } from './admin/admin.module';
 import { PrismaModule } from './prisma.module';
+import { HealthController } from './health.controller';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, InstitutionsModule, DriversModule, ParentsModule, AssignmentsModule, TripsModule, TrackingModule, EventsModule, AdminModule],
-  })
+  imports: [
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    InstitutionsModule,
+    DriversModule,
+    ParentsModule,
+    AssignmentsModule,
+    TripsModule,
+    TrackingModule,
+    EventsModule,
+    AdminModule,
+  ],
+  controllers: [HealthController],
+})
 export class AppModule {}

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import * as admin from 'firebase-admin';
 
@@ -19,9 +19,22 @@ export class EventsService {
     }
   }
 
-  async emit(tripId: string, childId: string, eventType: any, metadata?: any) {
+  async emit(driverId: string, tripId: string, childId: string, eventType: string, metadata?: any) {
+    const trip = await this.prisma.trip.findFirst({
+      where: { id: tripId, status: 'ACTIVE', routeTemplate: { driverId } },
+      include: { stops: true },
+    });
+    if (!trip) {
+      throw new BadRequestException('Trip not found for driver');
+    }
+
+    const childStop = trip.stops.find((stop) => stop.childId === childId);
+    if (!childStop) {
+      throw new BadRequestException('Child is not part of the active trip');
+    }
+
     try {
-      const event = await this.prisma.tripEvent.create({ data: { tripId, childId, eventType, metadata } });
+      const event = await this.prisma.tripEvent.create({ data: { tripId, childId, eventType: eventType as any, metadata } });
       this.logger.log(`event emitted trip=${tripId} child=${childId} type=${eventType}`);
       await this.notifyParent(childId, eventType, tripId);
       return { created: true, event };

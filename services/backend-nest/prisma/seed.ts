@@ -1,4 +1,4 @@
-import { PrismaClient, Role, VerificationStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
@@ -18,7 +18,7 @@ async function main() {
   const parent = await prisma.user.upsert({
     where: { email: 'parent@ashwa.app' },
     update: {},
-    create: { email: 'parent@ashwa.app', passwordHash, role: Role.PARENT, parentProfile: { create: { name: 'Demo Parent' } } },
+    create: { email: 'parent@ashwa.app', passwordHash, role: 'PARENT', parentProfile: { create: { name: 'Demo Parent' } } },
   });
 
   const driver = await prisma.user.upsert({
@@ -27,11 +27,11 @@ async function main() {
     create: {
       email: 'driver@ashwa.app',
       passwordHash,
-      role: Role.DRIVER,
+      role: 'DRIVER',
       driverProfile: {
         create: {
           name: 'Demo Driver',
-          verificationStatus: VerificationStatus.VERIFIED,
+          verificationStatus: 'VERIFIED',
           serviceArea: 'Central City',
           baseLat: 12.97,
           baseLng: 77.59,
@@ -63,7 +63,7 @@ async function main() {
   await prisma.user.upsert({
     where: { email: 'admin@ashwa.app' },
     update: {},
-    create: { email: 'admin@ashwa.app', passwordHash, role: Role.ADMIN },
+    create: { email: 'admin@ashwa.app', passwordHash, role: 'ADMIN' },
   });
 
   console.log({ schoolA: schoolA.name, schoolB: schoolB.name, parent: parent.email, driver: driver.email });

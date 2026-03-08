@@ -7,13 +7,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { PARENT DRIVER ADMIN }
-enum VerificationStatus { PENDING VERIFIED REJECTED SUSPENDED }
-enum InstitutionType { SCHOOL TUITION ACTIVITY }
-enum AssignmentStatus { REQUESTED ACCEPTED REJECTED CANCELLED }
-enum TripType { MORNING AFTERNOON }
-enum TripStatus { ACTIVE ENDED CANCELLED }
-enum StopType { PICKUP DROP SCHOOL }
+enum Role {
+  PARENT
+  DRIVER
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum InstitutionType {
+  SCHOOL
+  TUITION
+  ACTIVITY
+}
+
+enum AssignmentStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum TripType {
+  MORNING
+  AFTERNOON
+}
+
+enum TripStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum StopType {
+  PICKUP
+  DROP
+  SCHOOL
+}
 enum EventType {
   DRIVER_10_MIN_TO_PICKUP
   DRIVER_AT_PICKUP
