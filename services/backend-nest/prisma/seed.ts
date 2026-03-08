@@ -32,6 +32,10 @@ async function main() {
         create: {
           name: 'Demo Driver',
           verificationStatus: 'VERIFIED',
+          licenseDocUrl: '/seed/license.png',
+          vehicleRegDocUrl: '/seed/vehicle-registration.png',
+          idProofUrl: '/seed/id-proof.png',
+          vehiclePhotoUrl: '/seed/vehicle-photo.png',
           serviceArea: 'Central City',
           baseLat: 12.97,
           baseLng: 77.59,

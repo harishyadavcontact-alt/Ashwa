@@ -10,6 +10,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { PrismaService } from '../prisma.service';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { summarizeDriverTrust } from './driver-trust';
 
 @Controller('drivers')
 export class DriversController {
@@ -62,24 +63,39 @@ export class DriversController {
     const lng = Number(q.lng);
     const drivers = await this.prisma.driverProfile.findMany({
       where: {
-        verificationStatus: 'VERIFIED',
+        verificationStatus: { in: ['VERIFIED', 'PENDING', 'REJECTED', 'SUSPENDED'] },
         institutions: q.institutionId ? { some: { institutionId: q.institutionId } } : undefined,
       },
       include: { vehicle: true, user: true, institutions: { include: { institution: true } } },
     });
-    return drivers.filter((d) => {
-      if (!d.baseLat || !d.baseLng) return true;
-      const dx = d.baseLat - lat;
-      const dy = d.baseLng - lng;
-      return Math.sqrt(dx * dx + dy * dy) < radiusKm / 111;
+    return drivers
+      .map((driver) => ({ ...driver, trust: summarizeDriverTrust(driver as any) }))
+      .filter((driver) => driver.trust.isParentVisible)
+      .filter((driver) => {
+        if (!driver.baseLat || !driver.baseLng) return true;
+        const dx = driver.baseLat - lat;
+        const dy = driver.baseLng - lng;
+        return Math.sqrt(dx * dx + dy * dy) < radiusKm / 111;
+      });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('DRIVER')
+  @Get('me/summary')
+  async meSummary(@Req() req: any) {
+    const driver = await this.prisma.driverProfile.findUnique({
+      where: { userId: req.user.userId },
+      include: { vehicle: true, institutions: { include: { institution: true } }, user: true },
     });
+    return driver ? { ...driver, trust: summarizeDriverTrust(driver as any) } : null;
   }
 
   @Get(':id/summary')
-  summary(@Param('id') id: string) {
-    return this.prisma.driverProfile.findUnique({
+  async summary(@Param('id') id: string) {
+    const driver = await this.prisma.driverProfile.findUnique({
       where: { userId: id },
       include: { vehicle: true, institutions: { include: { institution: true } }, user: true },
     });
+    return driver ? { ...driver, trust: summarizeDriverTrust(driver as any) } : null;
   }
 }

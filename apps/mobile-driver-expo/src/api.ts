@@ -29,6 +29,9 @@ export const api = {
     request<{ accessToken: string }>('/auth/login', { method: 'POST', body: { email, password } }),
   currentAssignments: (token: string) => request<any[]>('/assignments/current', { token }),
   incomingAssignments: (token: string) => request<any[]>('/assignments/incoming', { token }),
+  meSummary: (token: string) => request<any>('/drivers/me/summary', { token }),
+  onboard: (token: string, body: Record<string, unknown>) =>
+    request('/drivers/onboard', { method: 'POST', token, body }),
   acceptAssignment: (token: string, id: string) => request(`/assignments/${id}/accept`, { method: 'POST', token }),
   rejectAssignment: (token: string, id: string) => request(`/assignments/${id}/reject`, { method: 'POST', token }),
   saveProfile: (token: string, body: Record<string, unknown>) => request('/drivers/profile', { method: 'PATCH', token, body }),

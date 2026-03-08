@@ -19,6 +19,9 @@ ashwa/
     shared/
   services/
     backend-nest/
+  docs/
+    release-checklist.md
+    pilot-launch-runbook.md
   .github/workflows/ci.yml
   docker-compose.yml
 ```
@@ -81,6 +84,7 @@ ashwa/
 - `GET|POST|PATCH /children`
 - `GET /institutions`
 - `GET /drivers/search`
+- `GET /drivers/me/summary`
 - `GET /drivers/:id/summary`
 - `POST /assignments/request`
 - `GET /assignments/incoming`
@@ -93,9 +97,14 @@ ashwa/
 - `POST /trips/:id/event`
 - `GET /events`
 - `GET /health`
+- `GET /admin/drivers`
+- `GET /admin/drivers/review-queue`
+- `POST /admin/drivers/:driverId/reject`
 
 ## Reliability Notes
 - Backend requests are validated against shared contracts in `packages/shared`.
 - Tracking subscriptions require auth and are scoped to real trip or driver access.
+- Driver trust readiness is enforced before parents can request a driver or drivers can start trips.
 - Parent and driver apps are now structured app shells instead of single-file demos, but they still need the full product backlog from Linear to reach pilot-complete depth.
 - CI validates install, Prisma generation, build, typecheck, and tests on pushes and pull requests.
+- Pilot operations docs live in [docs/release-checklist.md](/E:/Ashwa/docs/release-checklist.md) and [docs/pilot-launch-runbook.md](/E:/Ashwa/docs/pilot-launch-runbook.md).

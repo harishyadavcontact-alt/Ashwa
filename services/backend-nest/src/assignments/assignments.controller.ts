@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -15,6 +16,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { CurrentUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { summarizeDriverTrust } from '../drivers/driver-trust';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('assignments')
@@ -32,6 +34,19 @@ export class AssignmentsController {
       throw new NotFoundException('Child not found for parent');
     }
 
+    const driver = await this.prisma.driverProfile.findUnique({
+      where: { userId: body.driverId },
+      include: { vehicle: true, institutions: true },
+    });
+    if (!driver) {
+      throw new NotFoundException('Driver not found');
+    }
+
+    const trust = summarizeDriverTrust(driver as any);
+    if (!trust.isParentVisible) {
+      throw new BadRequestException('Driver is not requestable yet');
+    }
+
     return this.prisma.assignment.create({ data: { ...body, status: 'REQUESTED' } });
   }
 
@@ -46,13 +61,22 @@ export class AssignmentsController {
 
   @Roles('PARENT', 'DRIVER')
   @Get('current')
-  current(@CurrentUser() user: AuthUser) {
+  async current(@CurrentUser() user: AuthUser) {
     if (user.role === 'PARENT') {
-      return this.prisma.assignment.findFirst({
+      const assignment = await this.prisma.assignment.findFirst({
         where: { child: { parentId: user.userId }, status: 'ACCEPTED' },
-        include: { child: true, driver: { include: { vehicle: true, user: true } } },
+        include: { child: true, driver: { include: { vehicle: true, user: true, institutions: true } } },
         orderBy: { startDate: 'desc' },
       });
+      return assignment
+        ? {
+            ...assignment,
+            driver: {
+              ...assignment.driver,
+              trust: summarizeDriverTrust(assignment.driver as any),
+            },
+          }
+        : null;
     }
 
     return this.prisma.assignment.findMany({

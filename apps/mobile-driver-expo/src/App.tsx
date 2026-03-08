@@ -27,8 +27,19 @@ export default function App() {
   const [incoming, setIncoming] = useState<any[]>([]);
   const [accepted, setAccepted] = useState<any[]>([]);
   const [trip, setTrip] = useState<any | null>(null);
-  const [profile, setProfile] = useState({ name: 'Ashwa Driver', serviceArea: 'South Bengaluru', baseLat: 12.97, baseLng: 77.59 });
-  const [serviceInfo, setServiceInfo] = useState({ institutionIds: '', makeModel: 'Toyota HiAce', seatsCapacity: '12', plateNumber: 'KA-01-0001' });
+  const [driverSummary, setDriverSummary] = useState<any | null>(null);
+  const [profile, setProfile] = useState({
+    name: 'Ashwa Driver',
+    serviceArea: 'South Bengaluru',
+    baseLat: 12.97,
+    baseLng: 77.59,
+  });
+  const [serviceInfo, setServiceInfo] = useState({
+    institutionIds: '',
+    makeModel: 'Toyota HiAce',
+    seatsCapacity: '12',
+    plateNumber: 'KA-01-0001',
+  });
   const [selectedChildId, setSelectedChildId] = useState('');
   const [status, setStatus] = useState('Sign in to see the next operational action.');
   const [loading, setLoading] = useState(false);
@@ -40,7 +51,11 @@ export default function App() {
       setScreen('trip');
     });
     Location.requestForegroundPermissionsAsync().then((result) => {
-      setStatus(result.granted ? 'Location ready. You can publish active trip progress.' : 'Location access is off. Trip tracking cannot be trusted until enabled.');
+      setStatus(
+        result.granted
+          ? 'Location ready. You can publish active trip progress.'
+          : 'Location access is off. Trip tracking cannot be trusted until enabled.',
+      );
     });
   }, []);
 
@@ -51,14 +66,16 @@ export default function App() {
 
   async function refresh() {
     try {
-      const [incomingAssignments, activeAssignments, currentTrip] = await Promise.all([
+      const [incomingAssignments, activeAssignments, currentTrip, summary] = await Promise.all([
         api.incomingAssignments(token),
         api.currentAssignments(token),
         api.currentTrip(token),
+        api.meSummary(token),
       ]);
       setIncoming(incomingAssignments);
       setAccepted(Array.isArray(activeAssignments) ? activeAssignments : []);
       setTrip(currentTrip);
+      setDriverSummary(summary);
       const firstChildStop = currentTrip?.stops?.find((stop: any) => !!stop.childId);
       setSelectedChildId(firstChildStop?.childId || '');
     } catch (error: any) {
@@ -85,9 +102,18 @@ export default function App() {
     if (!token) return;
     setLoading(true);
     try {
+      await api.onboard(token, {
+        licenseDocUrl: '/local/license.png',
+        vehicleRegDocUrl: '/local/vehicle-registration.png',
+        idProofUrl: '/local/id-proof.png',
+        vehiclePhotoUrl: '/local/vehicle-photo.png',
+      });
       await api.saveProfile(token, profile);
       await api.saveServiceInfo(token, {
-        institutionIds: serviceInfo.institutionIds.split(',').map((value) => value.trim()).filter(Boolean),
+        institutionIds: serviceInfo.institutionIds
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean),
         serviceArea: profile.serviceArea,
         baseLat: profile.baseLat,
         baseLng: profile.baseLng,
@@ -97,6 +123,7 @@ export default function App() {
           plateNumber: serviceInfo.plateNumber,
         },
       });
+      await refresh();
       setScreen('inbox');
       setStatus('Service profile saved. Review incoming requests next.');
     } catch (error: any) {
@@ -190,6 +217,7 @@ export default function App() {
     setTrip(null);
     setIncoming([]);
     setAccepted([]);
+    setDriverSummary(null);
   }
 
   const nextAction = useMemo(() => {
@@ -204,12 +232,26 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <View style={styles.hero}>
           <Text style={styles.kicker}>Ashwa Driver</Text>
-          <Text style={styles.titleLight}>Operate, don’t improvise.</Text>
-          <Text style={styles.bodyLight}>The screen should always tell the driver the next correct action.</Text>
+          <Text style={styles.titleLight}>Operate, do not improvise.</Text>
+          <Text style={styles.bodyLight}>
+            The screen should always tell the driver the next correct action.
+          </Text>
         </View>
         <View style={styles.card}>
-          <TextInput value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} autoCapitalize="none" />
-          <TextInput value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} secureTextEntry />
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Email"
+            style={styles.input}
+            autoCapitalize="none"
+          />
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Password"
+            style={styles.input}
+            secureTextEntry
+          />
           <Button title={loading ? 'Signing in...' : 'Sign in'} onPress={login} disabled={loading} />
           <Text style={styles.status}>{status}</Text>
         </View>
@@ -222,14 +264,57 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Service setup</Text>
-          <Text style={styles.bodyDark}>Complete the operational profile once so trust state and matching remain explicit.</Text>
+          <Text style={styles.bodyDark}>
+            Complete the operational profile once so trust state and matching remain explicit.
+          </Text>
           <View style={styles.cardInline}>
-            <TextInput value={profile.name} onChangeText={(value) => setProfile({ ...profile, name: value })} placeholder="Driver name" style={styles.input} />
-            <TextInput value={profile.serviceArea} onChangeText={(value) => setProfile({ ...profile, serviceArea: value })} placeholder="Service area" style={styles.input} />
-            <TextInput value={serviceInfo.institutionIds} onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })} placeholder="Institution ids (comma-separated)" style={styles.input} />
-            <TextInput value={serviceInfo.makeModel} onChangeText={(value) => setServiceInfo({ ...serviceInfo, makeModel: value })} placeholder="Vehicle" style={styles.input} />
-            <TextInput value={serviceInfo.seatsCapacity} onChangeText={(value) => setServiceInfo({ ...serviceInfo, seatsCapacity: value })} placeholder="Seats" style={styles.input} keyboardType="number-pad" />
-            <TextInput value={serviceInfo.plateNumber} onChangeText={(value) => setServiceInfo({ ...serviceInfo, plateNumber: value })} placeholder="Plate number" style={styles.input} />
+            <Text style={styles.cardTitle}>Verification status</Text>
+            <Text style={styles.metric}>{driverSummary?.verificationStatus || 'PENDING'}</Text>
+            <Text style={styles.metric}>
+              Readiness: {driverSummary?.trust?.isServiceReady ? 'Ready for trips' : 'Needs action'}
+            </Text>
+            <Text style={styles.metric}>
+              Missing: {(driverSummary?.trust?.missingItems || []).join(', ') || 'None'}
+            </Text>
+          </View>
+          <View style={styles.cardInline}>
+            <TextInput
+              value={profile.name}
+              onChangeText={(value) => setProfile({ ...profile, name: value })}
+              placeholder="Driver name"
+              style={styles.input}
+            />
+            <TextInput
+              value={profile.serviceArea}
+              onChangeText={(value) => setProfile({ ...profile, serviceArea: value })}
+              placeholder="Service area"
+              style={styles.input}
+            />
+            <TextInput
+              value={serviceInfo.institutionIds}
+              onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })}
+              placeholder="Institution ids (comma-separated)"
+              style={styles.input}
+            />
+            <TextInput
+              value={serviceInfo.makeModel}
+              onChangeText={(value) => setServiceInfo({ ...serviceInfo, makeModel: value })}
+              placeholder="Vehicle"
+              style={styles.input}
+            />
+            <TextInput
+              value={serviceInfo.seatsCapacity}
+              onChangeText={(value) => setServiceInfo({ ...serviceInfo, seatsCapacity: value })}
+              placeholder="Seats"
+              style={styles.input}
+              keyboardType="number-pad"
+            />
+            <TextInput
+              value={serviceInfo.plateNumber}
+              onChangeText={(value) => setServiceInfo({ ...serviceInfo, plateNumber: value })}
+              placeholder="Plate number"
+              style={styles.input}
+            />
             <Button title="Save onboarding" onPress={saveOnboarding} />
           </View>
           <Button title="Skip to inbox" onPress={() => setScreen('inbox')} />
@@ -243,7 +328,9 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Incoming requests</Text>
-          <Text style={styles.bodyDark}>Accept only when seat capacity, institution fit, and route reality line up.</Text>
+          <Text style={styles.bodyDark}>
+            Accept only when seat capacity, institution fit, and route reality line up.
+          </Text>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           <FlatList
             data={incoming}
@@ -275,8 +362,18 @@ export default function App() {
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Current trip</Text>
-          <Text style={styles.metric}>{trip ? `${trip.tripType} • ${trip.status}` : 'No active trip'}</Text>
+          <Text style={styles.metric}>{trip ? `${trip.tripType} | ${trip.status}` : 'No active trip'}</Text>
           <Text style={styles.metric}>Accepted families: {accepted.length}</Text>
+        </View>
+        <View style={styles.cardInline}>
+          <Text style={styles.cardTitle}>Trust and readiness</Text>
+          <Text style={styles.metric}>Verification: {driverSummary?.verificationStatus || 'Unknown'}</Text>
+          <Text style={styles.metric}>
+            Service readiness: {driverSummary?.trust?.isServiceReady ? 'Ready' : 'Not ready'}
+          </Text>
+          <Text style={styles.metric}>
+            Next admin action: {driverSummary?.trust?.nextAdminAction || 'Review profile'}
+          </Text>
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Manifest and stop focus</Text>
@@ -306,19 +403,58 @@ export default function App() {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.surface },
   stack: { padding: 20, gap: 16 },
-  hero: { padding: 20, backgroundColor: colors.ink, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, gap: 10 },
+  hero: {
+    padding: 20,
+    backgroundColor: colors.ink,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    gap: 10,
+  },
   heroCard: { padding: 20, backgroundColor: '#dcebf0', borderRadius: 24, gap: 10 },
   kicker: { color: colors.accent, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   titleLight: { color: colors.panel, fontSize: 28, fontWeight: '700' },
   titleDark: { color: colors.ink, fontSize: 28, fontWeight: '700' },
   bodyLight: { color: '#dde4ea', fontSize: 15, lineHeight: 22 },
   bodyDark: { color: colors.muted, fontSize: 15, lineHeight: 22 },
-  card: { backgroundColor: colors.panel, marginHorizontal: 20, marginTop: 16, padding: 18, borderRadius: 18, borderWidth: 1, borderColor: colors.line, gap: 10 },
-  cardInline: { backgroundColor: colors.panel, padding: 18, borderRadius: 18, borderWidth: 1, borderColor: colors.line, gap: 10 },
+  card: {
+    backgroundColor: colors.panel,
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+    gap: 10,
+  },
+  cardInline: {
+    backgroundColor: colors.panel,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.line,
+    gap: 10,
+  },
   cardTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' },
   metric: { color: colors.muted, fontSize: 14 },
-  input: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: '#fbfaf7' },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#fbfaf7',
+  },
   status: { color: colors.muted, fontSize: 13 },
-  row: { backgroundColor: colors.panel, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  row: {
+    backgroundColor: colors.panel,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   actions: { gap: 10, paddingBottom: 24 },
 });

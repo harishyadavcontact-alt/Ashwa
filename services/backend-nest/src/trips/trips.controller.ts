@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from '../common/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+import { summarizeDriverTrust } from '../drivers/driver-trust';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('trips')
@@ -29,6 +31,14 @@ export class TripsController {
   @Post('start')
   @UsePipes(new ZodValidationPipe(TripStartSchema))
   async start(@Req() req: any, @Body() body: { tripType: 'MORNING' | 'AFTERNOON' }) {
+    const driver = await this.prisma.driverProfile.findUnique({
+      where: { userId: req.user.userId },
+      include: { vehicle: true, institutions: true },
+    });
+    if (!driver || !summarizeDriverTrust(driver as any).isServiceReady) {
+      throw new BadRequestException('Driver profile is not service-ready');
+    }
+
     const activeTrip = await this.prisma.trip.findFirst({
       where: {
         status: 'ACTIVE',

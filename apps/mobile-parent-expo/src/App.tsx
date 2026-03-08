@@ -259,8 +259,10 @@ export default function App() {
             <View style={styles.cardInline}>
               <Text style={styles.cardTitle}>{selectedDriver.name || selectedDriver.user?.email}</Text>
               <Text style={styles.metric}>Verification: {selectedDriver.verificationStatus}</Text>
+              <Text style={styles.metric}>Readiness: {selectedDriver.trust?.isServiceReady ? 'Ready for parent requests' : 'Needs review'}</Text>
               <Text style={styles.metric}>Vehicle: {selectedDriver.vehicle?.makeModel || 'Not added yet'}</Text>
               <Text style={styles.metric}>Seats: {selectedDriver.vehicle?.seatsCapacity || 'Unknown'}</Text>
+              <Text style={styles.metric}>Missing: {(selectedDriver.trust?.missingItems || []).join(', ') || 'None'}</Text>
               <Button title="Request seat" onPress={requestAssignment} />
             </View>
           ) : null}
@@ -271,7 +273,9 @@ export default function App() {
               <View style={styles.listRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardTitle}>{item.name || item.user?.email}</Text>
-                  <Text style={styles.metric}>{item.verificationStatus} • {item.vehicle?.makeModel || 'Vehicle pending'}</Text>
+                  <Text style={styles.metric}>
+                    {item.verificationStatus} | {item.trust?.isServiceReady ? 'Ready' : 'Needs review'} | {item.vehicle?.makeModel || 'Vehicle pending'}
+                  </Text>
                 </View>
                 <Button title="Inspect" onPress={() => inspectDriver(item.userId)} />
               </View>
@@ -316,6 +320,7 @@ export default function App() {
           <Text style={styles.cardTitle}>Assigned driver</Text>
           <Text style={styles.metric}>{assignment?.driver?.name || assignment?.driver?.user?.email || 'No accepted driver yet'}</Text>
           <Text style={styles.metric}>Trust state: {assignment?.driver?.verificationStatus || 'Unknown'}</Text>
+          <Text style={styles.metric}>Service readiness: {assignment?.driver?.trust?.isServiceReady ? 'Ready' : 'Not ready'}</Text>
         </View>
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Trip readiness</Text>
