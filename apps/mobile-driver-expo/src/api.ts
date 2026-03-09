@@ -1,4 +1,4 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
 type RequestOptions = {
@@ -43,6 +43,6 @@ export const api = {
   endTrip: (token: string, id: string) => request(`/trips/${id}/end`, { method: 'POST', token }),
   ping: (token: string, tripId: string, lat: number, lng: number) =>
     request('/tracking/ping', { method: 'POST', token, body: { tripId, lat, lng } }),
-  emitEvent: (token: string, tripId: string, childId: string, eventType: string) =>
+  emitEvent: (token: string, tripId: string, childId: string, eventType: EventType) =>
     request(`/trips/${tripId}/event`, { method: 'POST', token, body: { childId, eventType } }),
 };

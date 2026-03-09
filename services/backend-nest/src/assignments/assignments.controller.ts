@@ -106,4 +106,20 @@ export class AssignmentsController {
     }
     return this.prisma.assignment.update({ where: { id }, data: { status: 'REJECTED' } });
   }
+
+  @Roles('PARENT')
+  @Post(':id/cancel')
+  async cancel(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    const assignment = await this.prisma.assignment.findFirst({
+      where: {
+        id,
+        child: { parentId: user.userId },
+        status: { in: ['REQUESTED', 'ACCEPTED'] },
+      },
+    });
+    if (!assignment) {
+      throw new NotFoundException('Active assignment not found');
+    }
+    return this.prisma.assignment.update({ where: { id }, data: { status: 'CANCELLED' } });
+  }
 }

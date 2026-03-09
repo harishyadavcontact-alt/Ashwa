@@ -247,6 +247,12 @@ export type TimelineEventSummary = {
   metadata?: Record<string, unknown>;
 };
 
+export type TripNextActionSummary = {
+  label: string;
+  childId: string | null;
+  allowedEvents: EventType[];
+};
+
 export type CurrentTripState = {
   trip: {
     id: string;
@@ -257,6 +263,7 @@ export type CurrentTripState = {
   } | null;
   latestLocation: TripLocationSummary;
   nextStop: TripStopSummary | null;
+  nextAction: TripNextActionSummary | null;
   stops: TripStopSummary[];
   manifest: ChildSummary[];
   timeline: TimelineEventSummary[];

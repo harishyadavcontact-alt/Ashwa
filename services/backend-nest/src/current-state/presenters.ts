@@ -7,6 +7,7 @@ import {
   TripStopSummary,
 } from '@ashwa/shared';
 import { summarizeDriverTrust } from '../drivers/driver-trust';
+import { getNextTripAction } from '../trips/trip-progression';
 
 export function presentDriverSummary(driver: any): DriverServiceSummary {
   return {
@@ -86,22 +87,13 @@ function presentTimelineEvent(event: any): TimelineEventSummary {
   };
 }
 
-function isStopComplete(stop: any, events: any[]) {
-  if (stop.stopType === 'PICKUP') {
-    return events.some((event) => event.childId === stop.childId && event.eventType === 'CHILD_BOARDED');
-  }
-  if (stop.stopType === 'DROP') {
-    return events.some((event) => event.childId === stop.childId && event.eventType === 'CHILD_DROPPED');
-  }
-  return events.some((event) => event.eventType === 'DRIVER_AT_SCHOOL');
-}
-
 export function presentTripState(trip: any, visibleChildIds?: string[]): CurrentTripState {
   if (!trip) {
     return {
       trip: null,
       latestLocation: null,
       nextStop: null,
+      nextAction: null,
       stops: [],
       manifest: [],
       timeline: [],
@@ -120,9 +112,12 @@ export function presentTripState(trip: any, visibleChildIds?: string[]): Current
     .filter((event: any) => childFilter(event.childId))
     .sort((left: any, right: any) => left.timestamp.getTime() - right.timestamp.getTime())
     .map(presentTimelineEvent);
-
-  const nextStopRecord =
-    stops.find((stop: any) => !isStopComplete(stop, trip.events || [])) || null;
+  const nextAction = getNextTripAction({
+    tripType: trip.tripType,
+    stops,
+    events: trip.events || [],
+  });
+  const nextStopRecord = nextAction.nextStop || null;
 
   const manifest = stops
     .filter((stop: any) => !!stop.child)
@@ -145,6 +140,13 @@ export function presentTripState(trip: any, visibleChildIds?: string[]): Current
         }
       : null,
     nextStop: nextStopRecord ? presentStop(nextStopRecord) : null,
+    nextAction: nextStopRecord
+      ? {
+          label: nextAction.label,
+          childId: nextAction.childId,
+          allowedEvents: nextAction.allowedEvents,
+        }
+      : null,
     stops: stops.map(presentStop),
     manifest,
     timeline,

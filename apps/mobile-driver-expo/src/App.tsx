@@ -1,5 +1,6 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,13 +13,21 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { api } from './api';
 import { colors } from './theme';
 
 type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip';
 
 const SESSION_KEY = 'ashwa.driver.session';
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.emptyCard}>
+      <Text style={styles.cardTitle}>{title}</Text>
+      <Text style={styles.metric}>{body}</Text>
+    </View>
+  );
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
@@ -41,13 +50,17 @@ export default function App() {
     seatsCapacity: '12',
     plateNumber: 'KA-01-0001',
   });
-  const [selectedChildId, setSelectedChildId] = useState('');
+  const [locationMode, setLocationMode] = useState({
+    foregroundReady: false,
+    backgroundReady: false,
+  });
   const [status, setStatus] = useState('Sign in to see the next operational action.');
   const [loading, setLoading] = useState(false);
 
   const incoming = incomingState?.items || [];
   const accepted = assignmentState?.items || [];
   const trip = tripState?.trip || null;
+  const focusedChildId = tripState?.nextAction?.childId || tripState?.manifest[0]?.id || '';
 
   useEffect(() => {
     AsyncStorage.getItem(SESSION_KEY).then((value) => {
@@ -55,19 +68,41 @@ export default function App() {
       setToken(value);
       setScreen('trip');
     });
-    Location.requestForegroundPermissionsAsync().then((result) => {
-      setStatus(
-        result.granted
-          ? 'Location ready. You can publish active trip progress.'
-          : 'Location access is off. Trip tracking cannot be trusted until enabled.',
-      );
-    });
+    bootstrapLocationMode();
   }, []);
 
   useEffect(() => {
     if (!token) return;
     refresh();
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !trip?.id || !locationMode.foregroundReady) return;
+    const timer = setInterval(() => {
+      pingLocation('Foreground sync is active while this dashboard stays open.');
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [locationMode.foregroundReady, token, trip?.id]);
+
+  async function bootstrapLocationMode() {
+    try {
+      const foreground = await Location.requestForegroundPermissionsAsync();
+      const background = await Location.requestBackgroundPermissionsAsync();
+      setLocationMode({
+        foregroundReady: foreground.granted,
+        backgroundReady: background.granted,
+      });
+      setStatus(
+        foreground.granted
+          ? background.granted
+            ? 'Foreground and background location are ready for pilot operations.'
+            : 'Foreground location is ready. Background mode still needs device approval.'
+          : 'Location access is off. Trip tracking cannot be trusted until enabled.',
+      );
+    } catch {
+      setStatus('Location permission flow is unavailable on this device profile.');
+    }
+  }
 
   async function refresh() {
     try {
@@ -81,7 +116,6 @@ export default function App() {
       setAssignmentState(nextAssignmentState);
       setTripState(nextTripState);
       setDriverSummary(summary);
-      setSelectedChildId(nextTripState.nextStop?.childId || nextTripState.manifest[0]?.id || '');
     } catch (error: any) {
       setStatus(error.message || 'Could not refresh driver state.');
     }
@@ -152,13 +186,12 @@ export default function App() {
     }
   }
 
-  async function startTrip() {
+  async function startTrip(tripType: 'MORNING' | 'AFTERNOON') {
     if (!token) return;
     setLoading(true);
     try {
-      const current = await api.startTrip(token, 'MORNING');
+      const current = await api.startTrip(token, tripType);
       setTripState(current);
-      setSelectedChildId(current.nextStop?.childId || current.manifest[0]?.id || '');
       setScreen('trip');
       setStatus('Trip started. Next action is visible below.');
     } catch (error: any) {
@@ -182,30 +215,27 @@ export default function App() {
     }
   }
 
-  async function pingLocation() {
+  async function pingLocation(successMessage?: string) {
     if (!token || !trip?.id) return;
-    setLoading(true);
     try {
       const loc = await Location.getCurrentPositionAsync({});
       await api.ping(token, trip.id, loc.coords.latitude, loc.coords.longitude);
-      setStatus('Location ping sent for the active trip.');
+      if (successMessage) setStatus(successMessage);
       await refresh();
     } catch (error: any) {
       setStatus(error.message || 'Could not send location ping.');
-    } finally {
-      setLoading(false);
     }
   }
 
-  async function emitEvent(eventType: string) {
-    if (!token || !trip?.id || !selectedChildId) {
-      setStatus('Select a child stop first so event sequencing stays real.');
+  async function emitEvent(eventType: EventType) {
+    if (!token || !trip?.id || !focusedChildId) {
+      setStatus('The current stop has no valid child anchor yet.');
       return;
     }
     setLoading(true);
     try {
-      await api.emitEvent(token, trip.id, selectedChildId, eventType);
-      setStatus(`Event emitted: ${eventType}`);
+      await api.emitEvent(token, trip.id, focusedChildId, eventType);
+      setStatus(`Event emitted: ${eventType.replaceAll('_', ' ')}`);
       await refresh();
     } catch (error: any) {
       setStatus(error.message || 'Could not emit trip event.');
@@ -225,11 +255,11 @@ export default function App() {
   }
 
   const nextAction = useMemo(() => {
-    if (trip?.status === 'ACTIVE') return 'Continue current trip';
+    if (tripState?.nextAction?.label) return tripState.nextAction.label;
     if (incoming.length) return 'Review incoming seat requests';
     if (accepted.length) return 'Start the next assigned trip';
     return 'Complete onboarding and wait for assignments';
-  }, [accepted.length, incoming.length, trip?.status]);
+  }, [accepted.length, incoming.length, tripState?.nextAction?.label]);
 
   if (screen === 'auth') {
     return (
@@ -262,6 +292,12 @@ export default function App() {
             <Text style={styles.metric}>Missing: {(driverSummary?.trust?.missingItems || []).join(', ') || 'None'}</Text>
           </View>
           <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Location mode</Text>
+            <Text style={styles.metric}>Foreground: {locationMode.foregroundReady ? 'Ready' : 'Missing permission'}</Text>
+            <Text style={styles.metric}>Background: {locationMode.backgroundReady ? 'Ready' : 'Missing permission'}</Text>
+            <Button title="Recheck permissions" onPress={bootstrapLocationMode} />
+          </View>
+          <View style={styles.cardInline}>
             <TextInput value={profile.name} onChangeText={(value) => setProfile({ ...profile, name: value })} placeholder="Driver name" style={styles.input} />
             <TextInput value={profile.serviceArea} onChangeText={(value) => setProfile({ ...profile, serviceArea: value })} placeholder="Service area" style={styles.input} />
             <TextInput value={serviceInfo.institutionIds} onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })} placeholder="Institution ids (comma-separated)" style={styles.input} />
@@ -283,20 +319,26 @@ export default function App() {
           <Text style={styles.titleDark}>Incoming requests</Text>
           <Text style={styles.bodyDark}>Accept only when seat capacity, institution fit, and route reality line up.</Text>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
-          <FlatList
-            data={incoming}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.child?.name || 'Unknown child'}</Text>
-                  <Text style={styles.metric}>{item.child?.pickupAddress || 'Pickup missing'}</Text>
+          {incoming.length ? (
+            <FlatList
+              data={incoming}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{item.child?.name || 'Unknown child'}</Text>
+                    <Text style={styles.metric}>{item.child?.pickupAddress || 'Pickup missing'}</Text>
+                    <Text style={styles.metric}>{item.child?.institutionName || 'Institution pending'}</Text>
+                  </View>
+                  <Button title="Accept" onPress={() => handleAssignment('accept', item.id)} />
+                  <Button title="Reject" onPress={() => handleAssignment('reject', item.id)} />
                 </View>
-                <Button title="Accept" onPress={() => handleAssignment('accept', item.id)} />
-                <Button title="Reject" onPress={() => handleAssignment('reject', item.id)} />
-              </View>
-            )}
-          />
+              )}
+            />
+          ) : (
+            <EmptyState title="Inbox is clear" body="No pending seat requests need a decision right now." />
+          )}
           <Button title="Trip dashboard" onPress={() => setScreen('trip')} />
         </ScrollView>
       </SafeAreaView>
@@ -314,7 +356,7 @@ export default function App() {
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Current trip</Text>
           <Text style={styles.metric}>{trip ? `${trip.tripType} | ${trip.status}` : 'No active trip'}</Text>
-          <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
+          <Text style={styles.metric}>Current stop: {tripState?.nextStop?.address || 'No active stop'}</Text>
           <Text style={styles.metric}>Accepted families: {accepted.length}</Text>
         </View>
         <View style={styles.cardInline}>
@@ -324,21 +366,33 @@ export default function App() {
           <Text style={styles.metric}>Next admin action: {driverSummary?.trust?.nextAdminAction || 'Review profile'}</Text>
         </View>
         <View style={styles.cardInline}>
-          <Text style={styles.cardTitle}>Manifest and stop focus</Text>
-          {tripState?.manifest.map((child) => (
-            <Button key={child.id} title={`Focus ${child.name}`} onPress={() => setSelectedChildId(child.id)} />
-          ))}
-          <Text style={styles.metric}>Selected child stop: {selectedChildId || 'None selected'}</Text>
+          <Text style={styles.cardTitle}>Manifest</Text>
+          {tripState?.manifest.length ? (
+            tripState.manifest.map((child) => (
+              <Text key={child.id} style={styles.metric}>
+                {child.name} | {child.pickupAddress}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.metric}>No active manifest yet.</Text>
+          )}
+          <Text style={styles.metric}>Event anchor child: {focusedChildId || 'None'}</Text>
+        </View>
+        <View style={styles.cardInline}>
+          <Text style={styles.cardTitle}>Trip controls</Text>
+          {tripState?.nextAction?.allowedEvents.length ? (
+            tripState.nextAction.allowedEvents.map((eventType) => (
+              <Button key={eventType} title={eventType.replaceAll('_', ' ')} onPress={() => emitEvent(eventType)} />
+            ))
+          ) : (
+            <EmptyState title="No manual event needed" body="Start a trip or finish the current stop to unlock the next control." />
+          )}
         </View>
         <View style={styles.actions}>
           <Button title="Refresh" onPress={refresh} />
-          <Button title="Start morning trip" onPress={startTrip} />
-          <Button title="Ping location" onPress={pingLocation} />
-          <Button title="At pickup" onPress={() => emitEvent('DRIVER_AT_PICKUP')} />
-          <Button title="Child boarded" onPress={() => emitEvent('CHILD_BOARDED')} />
-          <Button title="At school" onPress={() => emitEvent('DRIVER_AT_SCHOOL')} />
-          <Button title="At drop" onPress={() => emitEvent('DRIVER_AT_DROP')} />
-          <Button title="Child dropped" onPress={() => emitEvent('CHILD_DROPPED')} />
+          <Button title="Start morning trip" onPress={() => startTrip('MORNING')} />
+          <Button title="Start afternoon trip" onPress={() => startTrip('AFTERNOON')} />
+          <Button title="Ping location now" onPress={() => pingLocation('Location ping sent for the active trip.')} />
           <Button title="End trip" onPress={endTrip} />
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
           <Button title="Sign out" onPress={signOut} />
@@ -382,6 +436,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     gap: 10,
   },
+  emptyCard: { backgroundColor: '#eef3f5', padding: 18, borderRadius: 18, borderWidth: 1, borderColor: '#c3d3d8', gap: 10 },
   cardTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' },
   metric: { color: colors.muted, fontSize: 14 },
   input: {

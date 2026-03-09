@@ -1,4 +1,5 @@
 import type {
+  ChildUpsertInput,
   CurrentAssignmentState,
   CurrentTripState,
   DriverServiceSummary,
@@ -37,15 +38,21 @@ export const api = {
       body: { email, password },
     }),
   listChildren: (token: string) => request<any[]>('/children', { token }),
-  createChild: (token: string, body: Record<string, unknown>) =>
+  createChild: (token: string, body: ChildUpsertInput) =>
     request('/children', { method: 'POST', token, body }),
+  updateChild: (token: string, id: string, body: Partial<ChildUpsertInput>) =>
+    request(`/children/${id}`, { method: 'PATCH', token, body }),
+  deleteChild: (token: string, id: string) => request(`/children/${id}`, { method: 'DELETE', token }),
   listInstitutions: () => request<any[]>('/institutions'),
   searchDrivers: (params: URLSearchParams) => request<DriverServiceSummary[]>(`/drivers/search?${params.toString()}`),
   driverSummary: (id: string) => request<DriverServiceSummary>(`/drivers/${id}/summary`),
   requestAssignment: (token: string, body: Record<string, unknown>) =>
     request('/assignments/request', { method: 'POST', token, body }),
+  cancelAssignment: (token: string, id: string) => request(`/assignments/${id}/cancel`, { method: 'POST', token }),
   currentAssignment: (token: string) => request<CurrentAssignmentState>('/assignments/current', { token }),
   currentTrip: (token: string) => request<CurrentTripState>('/trips/current', { token }),
   tripTimeline: (token: string, tripId: string) =>
     request<{ tripId: string; timeline: TimelineEventSummary[] }>(`/trips/${tripId}/timeline`, { token }),
+  saveDeviceToken: (token: string, deviceToken: string, platform: string) =>
+    request('/auth/device-token', { method: 'POST', token, body: { token: deviceToken, platform } }),
 };

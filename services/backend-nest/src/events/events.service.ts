@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import * as admin from 'firebase-admin';
+import { validateTripEvent } from '../trips/trip-progression';
 
 @Injectable()
 export class EventsService {
@@ -22,21 +23,32 @@ export class EventsService {
   async emit(driverId: string, tripId: string, childId: string, eventType: string, metadata?: any) {
     const trip = await this.prisma.trip.findFirst({
       where: { id: tripId, status: 'ACTIVE', routeTemplate: { driverId } },
-      include: { stops: true },
+      include: { stops: { include: { child: true } }, events: true },
     });
     if (!trip) {
       throw new BadRequestException('Trip not found for driver');
     }
 
-    const childStop = trip.stops.find((stop) => stop.childId === childId);
-    if (!childStop) {
-      throw new BadRequestException('Child is not part of the active trip');
+    const validation = validateTripEvent(trip as any, childId, eventType as any);
+    if (!validation.ok) {
+      throw new BadRequestException(validation.reason);
     }
 
     try {
-      const event = await this.prisma.tripEvent.create({ data: { tripId, childId, eventType: eventType as any, metadata } });
+      const event = await this.prisma.tripEvent.create({
+        data: {
+          tripId,
+          childId: validation.canonicalChildId,
+          eventType: eventType as any,
+          metadata: {
+            ...(metadata || {}),
+            nextActionLabel: validation.nextAction.label,
+            stopType: validation.nextAction.nextStop?.stopType,
+          },
+        },
+      });
       this.logger.log(`event emitted trip=${tripId} child=${childId} type=${eventType}`);
-      await this.notifyParent(childId, eventType, tripId);
+      await this.notifyParent(validation.canonicalChildId, eventType, tripId);
       return { created: true, event };
     } catch (e: any) {
       if (e.code === 'P2002') return { created: false, reason: 'duplicate_event' };

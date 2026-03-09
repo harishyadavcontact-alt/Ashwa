@@ -54,14 +54,18 @@ test('trip presenter filters parent-visible children and computes next stop', ()
         { id: 'stop-2', stopType: 'PICKUP', childId: 'child-2', child: { id: 'child-2', name: 'Diya', institutionId: 'school-1', pickupAddress: 'Pickup 2', dropAddress: 'Drop 2' }, address: 'Pickup 2', lat: 2, lng: 2, sequenceIndex: 1 },
         { id: 'stop-3', stopType: 'SCHOOL', childId: null, child: null, address: 'School', lat: 3, lng: 3, sequenceIndex: 2 },
       ],
-      events: [{ id: 'event-1', childId: 'child-1', child: { name: 'Aarav' }, eventType: 'CHILD_BOARDED', timestamp: new Date('2026-03-09T08:10:00.000Z'), metadata: null }],
+      events: [
+        { id: 'event-1', childId: 'child-1', child: { name: 'Aarav' }, eventType: 'DRIVER_AT_PICKUP', timestamp: new Date('2026-03-09T08:08:00.000Z'), metadata: null },
+        { id: 'event-2', childId: 'child-1', child: { name: 'Aarav' }, eventType: 'CHILD_BOARDED', timestamp: new Date('2026-03-09T08:10:00.000Z'), metadata: null },
+      ],
     },
     ['child-1'],
   );
 
   assert.equal(state.manifest.length, 1);
   assert.equal(state.manifest[0].id, 'child-1');
-  assert.equal(state.timeline.length, 1);
+  assert.equal(state.timeline.length, 2);
   assert.equal(state.nextStop?.id, 'stop-3');
+  assert.equal(state.nextAction?.allowedEvents[0], 'DRIVER_AT_SCHOOL');
   assert.equal(state.latestLocation?.lat, 12.97);
 });
