@@ -2,6 +2,23 @@
 
 Ashwa is a school-transport MVP with parent trust signals, deterministic trip events, live tracking, and dual mobile clients for parents and drivers.
 
+## Reading Order
+
+1. `Ashwa_genesis.md`
+2. `README.md`
+3. `docs/`
+
+`Ashwa_genesis.md` is the local source of truth for agents and repo-level doctrine.
+Use this `README.md` as the root map for setup, runtime, and navigation.
+
+## Development Model
+
+This repo follows a genesis-first, bottom-up development model:
+
+- global doctrine lives above the repo
+- `Ashwa_genesis.md` governs the repo locally
+- feature work should be clarified as close to execution as possible
+
 ## Stack
 - TypeScript across the repo
 - Backend: NestJS + Prisma + PostgreSQL
@@ -12,6 +29,8 @@ Ashwa is a school-transport MVP with parent trust signals, deterministic trip ev
 ## Repo Structure
 ```text
 ashwa/
+  Ashwa_genesis.md
+  README.md
   apps/
     mobile-parent-expo/
     mobile-driver-expo/
