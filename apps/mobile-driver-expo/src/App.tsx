@@ -23,9 +23,11 @@ import { SuccessStoriesScreen } from './SuccessStoriesScreen';
 import { AnalyticsScreen } from './AnalyticsScreen';
 import { VerificationBadge } from './VerificationBadge';
 import { VerificationForm } from './VerificationForm';
+import { OptimizedTripScreen } from './OptimizedTripScreen';
+import { OwnerDashboard } from './OwnerDashboard';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history' | 'owner-dashboard';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -458,8 +460,9 @@ export default function App() {
       const result = await api.login(email, password);
       await AsyncStorage.setItem(SESSION_KEY, result.accessToken);
       setToken(result.accessToken);
-      setScreen('onboarding');
-      setStatus('Signed in. Complete service details and then move into the inbox.');
+      // Skip onboarding - go straight to trip (Elon-style: no tutorial, just tap and go)
+      setScreen('trip');
+      setStatus('Signed in. Route loaded. Tap START TRIP to begin.');
     } catch (error: any) {
       setStatus(error.message || 'Login failed.');
     } finally {
@@ -1434,6 +1437,16 @@ export default function App() {
     );
   }
 
+  // Owner Dashboard Screen
+  if (screen === 'owner-dashboard') {
+    return (
+      <OwnerDashboard
+        token={token}
+        onNavigate={(nextScreen) => setScreen(nextScreen as Screen)}
+      />
+    );
+  }
+
   // Driver Verification Screen
   if (screen === 'verification') {
     return (
@@ -1655,6 +1668,47 @@ export default function App() {
     );
   }
 
+  // Use OptimizedTripScreen when trip is active, fallback to original dashboard
+  if (trip?.id) {
+    return (
+      <OptimizedTripScreen
+        tripActive={trip?.status === 'IN_PROGRESS'}
+        schoolName={tripState?.nextStop?.name || 'Next School'}
+        address={tripState?.nextStop?.address || 'Loading address...'}
+        pickupTime={tripState?.nextAction?.time || '08:00 AM'}
+        familiesOnBoard={accepted.length}
+        totalCapacity={12}
+        todayEarnings={1200}
+        weekEarnings={8400}
+        monthEarnings={32000}
+        earningsBreakdown={[
+          { name: 'School A', earnings: 800 },
+          { name: 'Tuition Center', earnings: 400 },
+        ]}
+        routeStops={[
+          { time: '7:45 AM', label: 'School A Pickup', location: 'Whitefield' },
+          { time: '9:15 AM', label: 'School Drop', location: 'HSR Layout' },
+          { time: '3:45 PM', label: 'Return Route', location: 'Whitefield' },
+          { time: '5:30 PM', label: 'Dance Academy', location: 'Koramangala' },
+        ]}
+        team={myTeam}
+        pickupLocations={[
+          { name: 'School A', lat: 13.035, lng: 77.6245 },
+          { name: 'Tuition Center', lat: 13.0279, lng: 77.5914 },
+          { name: 'Dance Academy', lat: 13.0349, lng: 77.6245 },
+        ]}
+        driverLocation={{ lat: 13.035, lng: 77.6245 }}
+        onStartTrip={() => startTrip('MORNING')}
+        onPauseTrip={() => {
+          setStatus('Trip paused. Resume when ready.');
+        }}
+        onArrivedAt={() => emitEvent('ARRIVED_AT_PICKUP')}
+        onCallParent={callParent}
+        onMarkUnavailable={() => setShowUnavailableModal(true)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.stack}>
@@ -1734,6 +1788,7 @@ export default function App() {
           <Button title="Success Stories" onPress={() => setScreen('success-stories')} color={colors.accent} />
           <Button title="Leaderboard" onPress={() => setScreen('leaderboard')} color={colors.accent} />
           <Button title="Route Analytics" onPress={() => setScreen('analytics')} color={colors.accent} />
+          <Button title="Owner Dashboard" onPress={() => setScreen('owner-dashboard')} color="#22c55e" />
           <Button title="Hiring System" onPress={() => { loadJobs(); setScreen('jobs'); }} />
           <Button title="Sign out" onPress={signOut} />
         </View>

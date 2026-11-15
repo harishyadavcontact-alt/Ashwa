@@ -35,6 +35,8 @@ import { io } from 'socket.io-client';
 import { api } from './api';
 import { API_BASE_URL } from './config';
 import { colors } from './theme';
+import { ParentHome } from './ParentHome';
+import { ReferralCard } from './ReferralCard';
 
 type Screen = 'auth' | 'home' | 'children' | 'drivers' | 'track' | 'referrals' | 'attendance' | 'invoice';
 
@@ -1006,26 +1008,23 @@ export default function App() {
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Referral earnings</Text>
-          <Text style={styles.bodyDark}>Earn ₹200 each time a referred parent pays for 3 months of service.</Text>
+          <Text style={styles.bodyDark}>Earn ₹200 each time a referred parent signs up. Show them the app works.</Text>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
 
-          <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Your referral code</Text>
-            <Text style={styles.metric}>{referralCode || 'Loading...'}</Text>
-            <Button title="Copy code" onPress={() => {
+          <ReferralCard
+            earnings={referralEarnings}
+            referralCode={referralCode}
+            totalReferrals={referralStats?.totalReferrals || 0}
+            potentialEarnings={referralStats?.potentialEarnings || 0}
+            onCopyCode={() => {
               if (referralCode) {
-                // In a real app, use Clipboard API
                 setStatus('Referral code copied!');
               }
-            }} />
-          </View>
-
-          <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Total earnings</Text>
-            <Text style={styles.kicker}>₹{referralEarnings}</Text>
-            <Text style={styles.metric}>From {referralStats?.totalReferrals || 0} referrals</Text>
-            <Text style={styles.metric}>Potential: ₹{referralStats?.potentialEarnings || 0}</Text>
-          </View>
+            }}
+            onViewDetails={() => {
+              // Stay on this screen, details shown inline
+            }}
+          />
 
           {referralStats?.referrals && referralStats.referrals.length > 0 ? (
             <View style={styles.cardInline}>
@@ -1088,12 +1087,12 @@ export default function App() {
           </View>
         </Modal>
 
-        <View style={styles.stack}>
-          <Text style={styles.titleDark}>Trip tracking</Text>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Full trip tracking</Text>
           <Text style={styles.bodyDark}>{trip ? `Current trip: ${trip.tripType} | ${trip.status}` : 'No active trip yet'}</Text>
           <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
           <Text style={styles.metric}>{tripState?.nextAction?.label || 'Waiting for the next operational transition'}</Text>
-        </View>
+        </ScrollView>
         {trip ? (
           <MapView
             style={styles.map}
@@ -1103,7 +1102,10 @@ export default function App() {
             <Marker coordinate={driverLoc} title="Driver" />
           </MapView>
         ) : (
-          <EmptyState title="Tracking is idle" body="The map activates only after the assigned driver starts a trip." />
+          <View style={styles.emptyStateContainer}>
+            <Text style={styles.titleDark}>Tracking is idle</Text>
+            <Text style={styles.bodyDark}>The map activates only after the assigned driver starts a trip.</Text>
+          </View>
         )}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Recent timeline</Text>
@@ -1116,8 +1118,8 @@ export default function App() {
           ) : (
             <Text style={styles.metric}>No trip events yet.</Text>
           )}
+          <Button title="Back home" onPress={() => setScreen('home')} />
         </View>
-        <Button title="Back home" onPress={() => setScreen('home')} />
 
         {/* SOS Button - Always visible on track screen */}
         <TouchableOpacity
@@ -1131,323 +1133,79 @@ export default function App() {
     );
   }
 
+  // OPTIMIZED MAP-FIRST HOME SCREEN
+  if (screen === 'home') {
+    return (
+      <>
+        {/* Emergency Confirmation Modal */}
+        <Modal
+          visible={emergencyModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setEmergencyModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Emergency Alert</Text>
+              <Text style={styles.modalBody}>
+                This will immediately alert the driver and send your location. Are you sure?
+              </Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setEmergencyModalVisible(false)}
+                  disabled={emergencySending}
+                >
+                  <Text style={styles.cancelButtonText}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton]}
+                  onPress={triggerEmergencyAlert}
+                  disabled={emergencySending}
+                >
+                  <Text style={styles.confirmButtonText}>
+                    {emergencySending ? 'SENDING...' : 'CONFIRM'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <ParentHome
+          token={token}
+          children={children}
+          assignment={assignment}
+          trip={trip}
+          driverLoc={driverLoc}
+          referralEarnings={referralEarnings}
+          referralCode={referralCode}
+          monthlyAttendance={monthlyAttendance}
+          attendanceRecords={attendanceRecords}
+          activeCall={activeCall}
+          callDuration={callDuration}
+          onCallDriver={callDriver}
+          onAttendanceHistory={() => setScreen('attendance')}
+          onReferrals={() => setScreen('referrals')}
+          onSettings={() => setScreen('children')}
+          onLogout={signOut}
+          onTrackingOpen={() => setScreen('track')}
+          onEmergency={() => setEmergencyModalVisible(true)}
+          isLoading={loading}
+        />
+      </>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
-      {/* Call Status Modal */}
-      <Modal
-        visible={callModalVisible && activeCall}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          if (activeCall?.status !== 'CONNECTED') {
-            setCallModalVisible(false);
-          }
-        }}
-      >
-        <View style={styles.callModalOverlay}>
-          <View style={styles.callModalContent}>
-            <Text style={styles.callModalTitle}>
-              {activeCall?.status === 'INITIATED' ? 'Calling...' : 'Connected'}
-            </Text>
-            <Text style={styles.callModalSubtitle}>
-              {activeCall?.receiverName || 'Driver'}
-            </Text>
-            {activeCall?.childName && (
-              <Text style={styles.callModalChild}>{activeCall.childName}</Text>
-            )}
-
-            <Text style={styles.callTimer}>
-              {Math.floor(callDuration / 60)}:{String(callDuration % 60).padStart(2, '0')}
-            </Text>
-
-            <Text style={styles.callStatus}>
-              {activeCall?.status === 'INITIATED' ? '[Calling...]' : '[Connected]'}
-            </Text>
-
-            {activeCall?.status === 'CONNECTED' && (
-              <TouchableOpacity
-                style={styles.endCallButton}
-                onPress={endCurrentCall}
-              >
-                <Text style={styles.endCallButtonText}>End Call</Text>
-              </TouchableOpacity>
-            )}
-
-            {activeCall?.status === 'ENDED' && (
-              <View style={styles.callEndedInfo}>
-                <Text style={styles.callEndedText}>
-                  Call ended
-                </Text>
-                <Text style={styles.callDurationText}>
-                  Duration: {Math.floor(callDuration / 60)}:{String(callDuration % 60).padStart(2, '0')}
-                </Text>
-                <TouchableOpacity
-                  style={styles.closeCallButton}
-                  onPress={() => {
-                    setCallModalVisible(false);
-                    setActiveCall(null);
-                    setCallDuration(0);
-                  }}
-                >
-                  <Text style={styles.closeCallButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Emergency Confirmation Modal */}
-      <Modal
-        visible={emergencyModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEmergencyModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Emergency Alert</Text>
-            <Text style={styles.modalBody}>
-              This will immediately alert the driver and send your location. Are you sure?
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setEmergencyModalVisible(false)}
-                disabled={emergencySending}
-              >
-                <Text style={styles.cancelButtonText}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={triggerEmergencyAlert}
-                disabled={emergencySending}
-              >
-                <Text style={styles.confirmButtonText}>
-                  {emergencySending ? 'SENDING...' : 'CONFIRM'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <ScrollView contentContainerStyle={styles.stack}>
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>Child status now</Text>
-          <Text style={styles.titleDark}>{childStatus}</Text>
-          <Text style={styles.bodyDark}>{status}</Text>
-        </View>
-
-        {monthlyAttendance ? (
-          <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Attendance This Month</Text>
-            <Text style={styles.kicker}>Attended: {monthlyAttendance.attendedDays} days</Text>
-            <Text style={styles.metric}>Invoice: ₹{monthlyAttendance.totalAmount} ({monthlyAttendance.attendedDays} × ₹{monthlyAttendance.pricePerDay}/day)</Text>
-            <Text style={styles.metric}>Status: {invoice?.status === 'PAID' ? '✓ Paid' : '⏳ Pending'}</Text>
-            <View style={styles.actions}>
-              <Button title="View calendar" onPress={() => setScreen('attendance')} />
-              <Button title="View invoice" onPress={() => setScreen('invoice')} />
-            </View>
-          </View>
-        ) : null}
-
-        {referralEarnings > 0 || referralCode ? (
-          <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Referral earnings</Text>
-            <Text style={styles.kicker}>₹{referralEarnings}</Text>
-            <Text style={styles.metric}>Total earned from referrals</Text>
-            <Button title="View details" onPress={() => setScreen('referrals')} />
-          </View>
-        ) : null}
-
-        <View style={styles.cardInline}>
-          <Text style={styles.cardTitle}>Assigned driver</Text>
-          <Text style={styles.metric}>{assignment?.driver?.name || 'No active assignment yet'}</Text>
-          <Text style={styles.metric}>Trust state: {assignment?.driver?.verificationStatus || 'Unknown'}</Text>
-          <Text style={styles.metric}>Service readiness: {assignment?.driver?.trust?.isServiceReady ? 'Ready' : 'Not ready'}</Text>
-          {assignment ? (
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.callDriverButton}
-                onPress={callDriver}
-              >
-                <Text style={styles.callDriverButtonText}>📞 CALL DRIVER</Text>
-              </TouchableOpacity>
-              <Button title="Cancel assignment" onPress={cancelAssignment} />
-            </View>
-          ) : null}
-        </View>
-        {enrolledServices.length > 0 && (
-          <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Your services</Text>
-            <Text style={styles.metric}>
-              {enrolledServices.map((s) => {
-                const service = availableServices.find((svc) => svc.id === s.serviceId);
-                return service?.name;
-              }).join(' + ')}
-            </Text>
-            <Text style={styles.kicker}>
-              ₹{enrolledServices.reduce((sum, e) => {
-                const service = availableServices.find((s) => s.id === e.serviceId);
-                return sum + (service?.pricePerMonth || 0);
-              }, 0)}/month
-            </Text>
-          </View>
-        )}
-
-        {availableServices.length > 0 && !enrolledServices.length && (
-          <View style={styles.cardInline}>
-            {!sharedRideOptions ? (
-              <>
-                <Text style={styles.cardTitle}>Available services</Text>
-                <Text style={styles.metric}>Select from {availableServices.length} options to get started</Text>
-                {availableServices.map((service) => (
-                  <TouchableOpacity
-                    key={service.id}
-                    onPress={() => {
-                      const isSelected = selectedServices.some((s) => s.id === service.id);
-                      if (isSelected) {
-                        setSelectedServices(selectedServices.filter((s) => s.id !== service.id));
-                      } else {
-                        setSelectedServices([...selectedServices, service]);
-                      }
-                    }}
-                    style={[styles.serviceOption, selectedServices.some((s) => s.id === service.id) && styles.serviceOptionSelected]}
-                  >
-                    <Text style={styles.metric}>{service.name} ({service.type})</Text>
-                    <Text style={styles.metric}>{service.startTime} - {service.endTime}</Text>
-                    <Text style={styles.cardTitle}>₹{service.pricePerMonth}/month</Text>
-                  </TouchableOpacity>
-                ))}
-                {selectedServices.length > 0 && (
-                  <View style={styles.actions}>
-                    <Text style={styles.metric}>Total: ₹{selectedServices.reduce((sum, s) => sum + s.pricePerMonth, 0)}/month</Text>
-                    <Button title="Enroll in services" onPress={enrollInSelectedServices} disabled={enrollmentInProgress} />
-                  </View>
-                )}
-              </>
-            ) : (
-              <>
-                <Text style={styles.cardTitle}>Choose your ride option</Text>
-                <Text style={styles.bodyDark}>Same route, same time = save money!</Text>
-
-                {/* Option 1: Alone */}
-                <TouchableOpacity
-                  onPress={() => setSelectedRideOption('ALONE')}
-                  style={[styles.rideOptionCard, selectedRideOption === 'ALONE' && styles.rideOptionSelected]}
-                >
-                  <Text style={styles.cardTitle}>Option 1: Alone</Text>
-                  <Text style={styles.metric}>Price: ₹200/month</Text>
-                  <Text style={styles.metric}>Seats: 1 seat reserved</Text>
-                </TouchableOpacity>
-
-                {/* Option 2: Shared with 1 family */}
-                {sharedRideOptions.shared2 && (
-                  <TouchableOpacity
-                    onPress={() => setSelectedRideOption('SHARED_2')}
-                    style={[styles.rideOptionCard, selectedRideOption === 'SHARED_2' && styles.rideOptionSelected]}
-                  >
-                    <Text style={styles.cardTitle}>Option 2: Share with 1 family (recommended ⭐)</Text>
-                    <Text style={styles.metric}>Price: ₹150/month (save ₹50!)</Text>
-                    <Text style={styles.metric}>Families: {sharedRideOptions.shared2.families.join(', ')}</Text>
-                    <Text style={styles.metric}>Same time, same route</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Option 3: Shared with 2+ families */}
-                {sharedRideOptions.shared3Plus && (
-                  <TouchableOpacity
-                    onPress={() => setSelectedRideOption('SHARED_3PLUS')}
-                    style={[styles.rideOptionCard, selectedRideOption === 'SHARED_3PLUS' && styles.rideOptionSelected]}
-                  >
-                    <Text style={styles.cardTitle}>Option 3: Share with {sharedRideOptions.shared3Plus.families.length} families</Text>
-                    <Text style={styles.metric}>Price: ₹120/month (save ₹80!)</Text>
-                    <Text style={styles.metric}>Families: {sharedRideOptions.shared3Plus.families.join(', ')}</Text>
-                  </TouchableOpacity>
-                )}
-
-                <View style={styles.actions}>
-                  <Button
-                    title={`Confirm ${selectedRideOption === 'ALONE' ? 'Solo' : 'Shared'} Enrollment`}
-                    onPress={() => {
-                      const service = selectedServices[0];
-                      if (service) confirmEnrollment(service.id, selectedRideOption);
-                    }}
-                  />
-                  <Button
-                    title="Change service"
-                    onPress={() => {
-                      setSharedRideOptions(null);
-                      setSelectedRideOption('ALONE');
-                    }}
-                  />
-                </View>
-              </>
-            )}
-          </View>
-        )}
-
-        <View style={styles.cardInline}>
-          <Text style={styles.cardTitle}>Trip readiness</Text>
-          <Text style={styles.metric}>{trip ? `${trip.tripType} trip is ${trip.status}` : 'No active trip'}</Text>
-          <Text style={styles.metric}>Next stop: {tripState?.nextStop?.address || 'No next stop'}</Text>
-          <Text style={styles.metric}>{tripState?.nextAction?.label || 'Waiting for driver action'}</Text>
-          <Text style={styles.metric}>{children.length} child profile(s) on file</Text>
-        </View>
-
-        {(() => {
-          const substituteNotifications = getSubstituteNotifications();
-          const parentNotifications = substituteNotifications.filter(n =>
-            n.type === 'PARENT_SUBSTITUTE_NOTIFICATION' || n.type === 'REFUND_NOTIFICATION'
-          );
-
-          if (parentNotifications.length > 0) {
-            return (
-              <View style={styles.cardInline}>
-                <Text style={styles.cardTitle}>Driver Update</Text>
-                {parentNotifications.map((notif, idx) => (
-                  <View key={idx} style={{ marginBottom: 12 }}>
-                    <Text style={styles.metric}>{notif.message}</Text>
-                    <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
-                      {new Date(notif.timestamp).toLocaleTimeString()}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            );
-          }
-          return null;
-        })()}
-
-        {!children.length ? (
-          <EmptyState title="Start with the child record" body="Without that, driver discovery and route matching are still guesses." />
-        ) : null}
-        <View style={styles.actions}>
-          <Button title="Manage children" onPress={() => setScreen('children')} />
-          <Button title="Find driver" onPress={searchDrivers} />
-          <Button title="Open tracking" onPress={() => setScreen('track')} />
-          <Button title="Earnings" onPress={() => setScreen('referrals')} />
-          <Button title="Refresh state" onPress={refreshHome} />
-          <Button title="Sign out" onPress={signOut} />
-        </View>
-      </ScrollView>
-
-      {/* SOS Button - Always visible on home screen */}
-      <TouchableOpacity
-        style={styles.sosButton}
-        onPress={() => setEmergencyModalVisible(true)}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.sosButtonText}>🚨</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
-  );
+      {/* Legacy screens preserved for navigation */}
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.surface },
-  stack: { padding: 20, gap: 16 },
+  stack: { padding: 20, gap: 16, paddingBottom: 40 },
+  emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, gap: 12 },
   hero: { padding: 20, backgroundColor: colors.ink, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, gap: 10 },
   heroCard: { padding: 20, backgroundColor: '#e5efe9', borderRadius: 24, gap: 10 },
   kicker: { color: colors.accent, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },

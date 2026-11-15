@@ -104,4 +104,26 @@ export const api = {
     request<Array<{ tripId: string; tripType: string; date: string; children: Array<{ childId: string; childName: string; boarded?: string; dropped?: string }> }>>(`/trips/history?limit=${limit || 30}`, { token }),
   getAttendanceHistory: (token: string, month: number, year: number) =>
     request<AttendanceRecord[]>(`/attendance/history?month=${month}&year=${year}`, { token }),
+
+  // Owner Dashboard
+  getOwnerDashboard: (token: string) =>
+    request<any>('/owner/dashboard', { token }),
+  getRouteOverview: (token: string) =>
+    request<any>('/owner/routes/overview', { token }),
+  getTodayEarnings: (token: string) =>
+    request<any>('/owner/earnings/today', { token }),
+  getTeamEarnings: (token: string) =>
+    request<any>('/owner/team/earnings', { token }),
+  getLoanStatus: (token: string) =>
+    request<any>('/owner/loan/status', { token }),
+  getRouteProfitability: (token: string) =>
+    request<any>('/owner/routes/profitability', { token }),
+  getAttendanceStats: (token: string) =>
+    request<any>('/owner/attendance/stats', { token }),
+  processPaymentEarly: (token: string) =>
+    request<any>('/owner/payroll/pay-early', { method: 'POST', token }),
+  toggleLoanAutoDeduct: (token: string, enabled: boolean) =>
+    request<any>('/owner/loan/auto-deduct', { method: 'PATCH', token, body: { enabled } }),
+  getLoanSchedule: (token: string) =>
+    request<any>('/owner/loan/schedule', { token }),
 };
