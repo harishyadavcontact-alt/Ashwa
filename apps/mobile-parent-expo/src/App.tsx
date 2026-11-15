@@ -1478,6 +1478,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5f3ff',
     borderColor: colors.accent,
   },
+  rideOptionCard: {
+    padding: 14,
+    marginVertical: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  rideOptionSelected: {
+    backgroundColor: '#e5f3ff',
+    borderColor: colors.accent,
+    borderWidth: 3,
+  },
   sosButton: {
     position: 'absolute',
     bottom: 24,

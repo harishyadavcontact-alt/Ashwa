@@ -10,6 +10,7 @@ import { TrackingModule } from './tracking/tracking.module';
 import { EventsModule } from './events/events.module';
 import { AdminModule } from './admin/admin.module';
 import { ReferralsModule } from './referrals/referrals.module';
+import { SharedRidesModule } from './shared-rides/shared-rides.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 
@@ -27,6 +28,7 @@ import { HealthController } from './health.controller';
     EventsModule,
     AdminModule,
     ReferralsModule,
+    SharedRidesModule,
   ],
   controllers: [HealthController],
 })

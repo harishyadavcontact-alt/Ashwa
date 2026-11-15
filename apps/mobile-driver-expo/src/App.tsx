@@ -99,6 +99,10 @@ export default function App() {
   const [verification, setVerification] = useState<DriverVerification | null>(null);
   const [allVerifications, setAllVerifications] = useState<DriverVerification[]>([]);
 
+  // Shared Rides state
+  const [sharedRidesData, setSharedRidesData] = useState<any>(null);
+  const [seatAllocation, setSeatAllocation] = useState<any>(null);
+
   // Substitute Driver Assignment state
   const [showUnavailableModal, setShowUnavailableModal] = useState(false);
   const [unavailableReason, setUnavailableReason] = useState<SubstituteReason>('SICK');
@@ -183,9 +187,46 @@ export default function App() {
         ];
         await AsyncStorage.setItem('ashwa.services', JSON.stringify(demoServices));
         setServices(demoServices);
+
+        // Initialize demo shared rides data for drivers
+        const demoSharedRides = {
+          'demo-1': {
+            totalCapacity: 12,
+            aloneRiders: 2,
+            sharedGroups: 2,
+            seatsUsed: 5,
+            totalEarnings: 1350,
+            costSavings: 150,
+            groupDetails: [
+              { groupId: 'group-1', size: 1, parentNames: ['Sharma Family'], price: 200 },
+              { groupId: 'group-2', size: 2, parentNames: ['Patel Family', 'Kumar Family'], price: 150, saved: 50 },
+              { groupId: 'group-3', size: 2, parentNames: ['Iyer Family', 'Reddy Family'], price: 150, saved: 50 },
+            ]
+          },
+          'demo-2': {
+            totalCapacity: 8,
+            aloneRiders: 1,
+            sharedGroups: 1,
+            seatsUsed: 3,
+            totalEarnings: 550,
+            costSavings: 50,
+            groupDetails: [
+              { groupId: 'group-4', size: 1, parentNames: ['Gupta Family'], price: 200 },
+              { groupId: 'group-5', size: 2, parentNames: ['Sharma Family', 'Patel Family'], price: 150, saved: 50 },
+            ]
+          }
+        };
+        await AsyncStorage.setItem('ashwa.shared_rides', JSON.stringify(demoSharedRides));
+        setSharedRidesData(demoSharedRides);
       } else {
         const loaded = JSON.parse(existingServices);
         setServices(loaded);
+
+        // Load shared rides data
+        const storedSharedRides = await AsyncStorage.getItem('ashwa.shared_rides');
+        if (storedSharedRides) {
+          setSharedRidesData(JSON.parse(storedSharedRides));
+        }
       }
     } catch (error: any) {
       console.error('Failed to initialize services:', error);
@@ -1415,22 +1456,56 @@ export default function App() {
           <Text style={styles.bodyDark}>Create multiple routes to increase revenue: morning school, afternoon tuition, evening dance.</Text>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           {services.length > 0 ? (
-            <FlatList
-              data={services}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.metric}>
-                      {item.startTime} - {item.endTime} | {item.daysOfWeek.map((d) => getDayName(d).substring(0, 3)).join(', ')}
-                    </Text>
-                    <Text style={styles.metric}>₹{item.pricePerMonth}/month | {item.capacity} seats</Text>
-                  </View>
-                </View>
-              )}
-            />
+            <>
+              <FlatList
+                data={services}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => {
+                  const allocation = sharedRidesData?.[item.id];
+                  return (
+                    <View>
+                      <View style={styles.row}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.cardTitle}>{item.name}</Text>
+                          <Text style={styles.metric}>
+                            {item.startTime} - {item.endTime} | {item.daysOfWeek.map((d) => getDayName(d).substring(0, 3)).join(', ')}
+                          </Text>
+                          <Text style={styles.metric}>₹{item.pricePerMonth}/month | {item.capacity} seats</Text>
+                        </View>
+                      </View>
+
+                      {/* Seat Allocation Card */}
+                      {allocation && (
+                        <View style={styles.cardInline}>
+                          <Text style={styles.cardTitle}>Seat Allocation & Earnings</Text>
+                          <Text style={styles.metric}>{allocation.seatsUsed}/{allocation.totalCapacity} seats used</Text>
+                          <Text style={styles.metric}>Alone riders: {allocation.aloneRiders} passengers</Text>
+                          <Text style={styles.metric}>Shared groups: {allocation.sharedGroups} groups</Text>
+                          <Text style={[styles.cardTitle, { color: '#22c55e', marginTop: 8 }]}>₹{allocation.totalEarnings} Total Earnings</Text>
+                          {allocation.costSavings > 0 && (
+                            <Text style={{ color: '#3b82f6', fontSize: 13, marginTop: 4 }}>Parent savings: ₹{allocation.costSavings} (more occupancy!)</Text>
+                          )}
+
+                          {/* Group Details */}
+                          {allocation.groupDetails && (
+                            <View style={{ marginTop: 12 }}>
+                              <Text style={styles.metric}>Groups breakdown:</Text>
+                              {allocation.groupDetails.map((group: any) => (
+                                <View key={group.groupId} style={{ paddingLeft: 12, marginTop: 6, borderLeftWidth: 2, borderLeftColor: colors.accent }}>
+                                  <Text style={styles.metric}>{group.parentNames.join(' + ')}</Text>
+                                  <Text style={styles.metric}>₹{group.price}/person {group.saved ? `(save ₹${group.saved})` : ''}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                }}
+              />
+            </>
           ) : (
             <EmptyState title="No services yet" body="Create your first service to start offering multiple routes." />
           )}
