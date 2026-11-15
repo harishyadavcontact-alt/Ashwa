@@ -1,4 +1,4 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType, Job, JobApplication, TeamMember, PayrollRecord, SuccessStory, LeaderboardEntry, LeaderboardQueryParams } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType, Job, JobApplication, TeamMember, PayrollRecord, SuccessStory, LeaderboardEntry, LeaderboardQueryParams, SubstituteAssignment, DriverAvailability, SubstituteReason, AttendanceRecord } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
 type RequestOptions = {
@@ -76,4 +76,32 @@ export const api = {
     ),
   getMyRank: (token: string, metric: string, period: string) =>
     request<LeaderboardEntry>(`/leaderboard/my-rank?metric=${metric}&period=${period}`, { token }),
+
+  // Substitute Driver Assignment
+  markUnavailable: (token: string, tripId: string, reason: SubstituteReason) =>
+    request<SubstituteAssignment>('/substitutes/mark-unavailable', {
+      method: 'POST',
+      token,
+      body: { tripId, reason }
+    }),
+  findBackupDriver: (token: string, tripId: string) =>
+    request<DriverAvailability | null>('/substitutes/find-backup', {
+      method: 'POST',
+      token,
+      body: { tripId }
+    }),
+  confirmBackupDriver: (token: string, assignmentId: string, backupDriverId: string) =>
+    request<SubstituteAssignment>(`/substitutes/${assignmentId}/confirm`, {
+      method: 'POST',
+      token,
+      body: { backupDriverId }
+    }),
+  getSubstituteAssignments: (token: string) =>
+    request<SubstituteAssignment[]>('/substitutes/my-assignments', { token }),
+
+  // Trip History & Attendance
+  getTripHistory: (token: string, limit?: number) =>
+    request<Array<{ tripId: string; tripType: string; date: string; children: Array<{ childId: string; childName: string; boarded?: string; dropped?: string }> }>>(`/trips/history?limit=${limit || 30}`, { token }),
+  getAttendanceHistory: (token: string, month: number, year: number) =>
+    request<AttendanceRecord[]>(`/attendance/history?month=${month}&year=${year}`, { token }),
 };

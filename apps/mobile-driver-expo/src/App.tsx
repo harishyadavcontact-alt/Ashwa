@@ -241,6 +241,30 @@ export default function App() {
     return () => clearInterval(timer);
   }, [locationMode.foregroundReady, token, trip?.id]);
 
+  // Track active call duration
+  useEffect(() => {
+    const checkActiveCall = () => {
+      const call = getActiveCall();
+      if (call && call.status === 'CONNECTED') {
+        setActiveCall(call);
+        setCallDuration(call.durationSeconds);
+      } else if (call && call.status === 'INITIATED') {
+        setActiveCall(call);
+        setCallDuration(0);
+      } else if (activeCall && call?.status === 'ENDED') {
+        // Call has ended, show summary
+        setActiveCall(call);
+        setCallDuration(call.durationSeconds);
+      } else if (!call) {
+        setActiveCall(null);
+        setCallDuration(0);
+      }
+    };
+
+    const interval = setInterval(checkActiveCall, 500);
+    return () => clearInterval(interval);
+  }, [activeCall]);
+
   async function bootstrapLocationMode() {
     try {
       const foreground = await Location.requestForegroundPermissionsAsync();
@@ -1335,6 +1359,25 @@ export default function App() {
             ))
           ) : (
             <EmptyState title="No manual event needed" body="Start a trip or finish the current stop to unlock the next control." />
+          )}
+        </View>
+        <View style={styles.cardInline}>
+          <Text style={styles.cardTitle}>Substitute Assignments</Text>
+          {currentSubstitute ? (
+            <>
+              <Text style={styles.metric}>Status: {currentSubstitute.status}</Text>
+              <Text style={styles.metric}>Backup Fee: ₹{currentSubstitute.backupFee}</Text>
+            </>
+          ) : (
+            <Text style={styles.metric}>No active substitute assignment</Text>
+          )}
+          {trip && (
+            <Button
+              title={findingBackup ? 'Finding backup...' : 'Mark myself unavailable'}
+              onPress={() => setShowUnavailableModal(true)}
+              disabled={findingBackup}
+              color="#d32f2f"
+            />
           )}
         </View>
         <View style={styles.actions}>

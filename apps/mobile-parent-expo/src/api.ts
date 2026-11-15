@@ -5,6 +5,9 @@ import type {
   DriverServiceSummary,
   TimelineEventSummary,
   ParentReferralStats,
+  AttendanceRecord,
+  Invoice,
+  MonthlyAttendanceSummary,
 } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
@@ -70,4 +73,16 @@ export const api = {
     request<ParentReferralStats>('/referrals/stats', { token }),
   getMyReferralEarnings: (token: string) =>
     request<{ totalEarnings: number }>('/referrals/earnings', { token }),
+
+  // Attendance & Invoices
+  getMonthlyAttendance: (token: string, month: number, year: number) =>
+    request<MonthlyAttendanceSummary>(`/attendance/monthly?month=${month}&year=${year}`, { token }),
+  getAttendanceRecords: (token: string, childId: string, month: number, year: number) =>
+    request<AttendanceRecord[]>(`/attendance/child/${childId}?month=${month}&year=${year}`, { token }),
+  getInvoice: (token: string, month: number, year: number) =>
+    request<Invoice>(`/invoices/monthly?month=${month}&year=${year}`, { token }),
+  markAttendanceExcused: (token: string, childId: string, date: string) =>
+    request('/attendance/excused', { method: 'POST', token, body: { childId, date } }),
+  payInvoice: (token: string, invoiceId: string) =>
+    request(`/invoices/${invoiceId}/pay`, { method: 'POST', token }),
 };
