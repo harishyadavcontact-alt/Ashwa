@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { api } from './api';
+import { AdminVerificationDashboard } from './AdminVerification';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { SuccessStoriesScreen } from './SuccessStoriesScreen';
 import { AnalyticsScreen } from './AnalyticsScreen';
@@ -24,7 +25,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { VerificationForm } from './VerificationForm';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'analytics' | 'trip-history';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -96,6 +97,7 @@ export default function App() {
 
   // Driver Verification state
   const [verification, setVerification] = useState<DriverVerification | null>(null);
+  const [allVerifications, setAllVerifications] = useState<DriverVerification[]>([]);
 
   // Substitute Driver Assignment state
   const [showUnavailableModal, setShowUnavailableModal] = useState(false);
@@ -127,6 +129,7 @@ export default function App() {
     bootstrapLocationMode();
     initializeDemoServices();
     initializeDemoVerifications();
+    initializeDemoSubstitutes();
   }, []);
 
   async function initializeDemoServices() {
@@ -191,9 +194,9 @@ export default function App() {
 
   async function initializeDemoVerifications() {
     try {
+      // Load current driver verification
       const existingVerifications = await AsyncStorage.getItem('ashwa.verifications');
       if (!existingVerifications) {
-        // Load current driver verification from demo data
         const demoVerification: DriverVerification = {
           id: 'demo-verification',
           driverId: 'demo-driver',
@@ -204,7 +207,7 @@ export default function App() {
           insuranceExpiry: '2027-06-30',
           policeCheckDone: true,
           status: 'APPROVED',
-          approvedAt: new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000).toISOString(), // 6 months ago
+          approvedAt: new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000).toISOString(),
           approvedBy: 'admin-1',
         };
         await AsyncStorage.setItem('ashwa.verifications', JSON.stringify(demoVerification));
@@ -213,8 +216,105 @@ export default function App() {
         const loaded = JSON.parse(existingVerifications);
         setVerification(loaded);
       }
+
+      // Load admin verifications (for admin dashboard)
+      const existingAdminVerifications = await AsyncStorage.getItem('ashwa.admin.verifications');
+      if (!existingAdminVerifications) {
+        const demoAdminVerifications: DriverVerification[] = [
+          {
+            id: 'admin-demo-1',
+            driverId: 'rajesh-driver',
+            licenseNumber: 'DL-9876543210',
+            licenseExpiry: '2025-12-31',
+            insuranceDocUrl: 'https://demo.supabase.co/insurance.pdf',
+            policyNumber: 'POL-1111111111',
+            insuranceExpiry: '2026-06-30',
+            policeCheckDone: true,
+            status: 'APPROVED',
+            approvedAt: new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000).toISOString(),
+            approvedBy: 'admin-1',
+          },
+          {
+            id: 'admin-demo-2',
+            driverId: 'priya-driver',
+            licenseNumber: 'DL-5555555555',
+            licenseExpiry: '2025-06-30',
+            insuranceDocUrl: 'https://demo.supabase.co/insurance.pdf',
+            policyNumber: 'POL-2222222222',
+            insuranceExpiry: '2025-12-31',
+            policeCheckDone: false,
+            status: 'PENDING',
+            submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          },
+          {
+            id: 'admin-demo-3',
+            driverId: 'ahmed-driver',
+            licenseNumber: 'DL-3333333333',
+            licenseExpiry: '2025-03-31',
+            insuranceDocUrl: 'https://demo.supabase.co/insurance.pdf',
+            policyNumber: 'POL-3333333333',
+            insuranceExpiry: '2025-09-30',
+            policeCheckDone: false,
+            status: 'NOT_STARTED',
+          },
+        ];
+        await AsyncStorage.setItem('ashwa.admin.verifications', JSON.stringify(demoAdminVerifications));
+      }
     } catch (error: any) {
       console.error('Failed to initialize verifications:', error);
+    }
+  }
+
+  async function initializeDemoSubstitutes() {
+    try {
+      const existingSubstitutes = await AsyncStorage.getItem('ashwa.substitutes');
+      if (!existingSubstitutes) {
+        // Initialize demo substitute assignments
+        const demoSubstitutes: SubstituteAssignment[] = [
+          {
+            id: 'demo-sub-1',
+            originalDriverId: 'driver-1',
+            backupDriverId: 'backup-priya',
+            serviceId: 'demo-1',
+            date: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            reason: 'SICK',
+            backupFee: 200,
+            status: 'COMPLETED',
+            parentNotifiedAt: new Date(Date.now() - 23 * 60 * 60 * 1000),
+            backupNotifiedAt: new Date(Date.now() - 23 * 60 * 60 * 1000),
+          },
+        ];
+        await AsyncStorage.setItem('ashwa.substitutes', JSON.stringify(demoSubstitutes));
+        setSubstitutes(demoSubstitutes);
+      } else {
+        const loaded = JSON.parse(existingSubstitutes);
+        setSubstitutes(loaded);
+      }
+
+      // Initialize demo availability records
+      const existingAvailability = await AsyncStorage.getItem('ashwa.availability');
+      if (!existingAvailability) {
+        const demoAvailability: DriverAvailability[] = [
+          {
+            id: 'demo-avail-1',
+            driverId: 'driver-1',
+            date: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            available: false,
+            reason: 'SICK',
+            routesCoveringCount: 1,
+          },
+          {
+            id: 'demo-avail-2',
+            driverId: 'backup-priya',
+            date: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            available: true,
+            routesCoveringCount: 2,
+          },
+        ];
+        await AsyncStorage.setItem('ashwa.availability', JSON.stringify(demoAvailability));
+      }
+    } catch (error: any) {
+      console.error('Failed to initialize substitutes:', error);
     }
   }
 
@@ -860,6 +960,58 @@ export default function App() {
     console.log(`[Analytics] ${event}:`, properties);
   }
 
+  async function callParent() {
+    const currentAssignment = incoming[0] || accepted[0];
+    if (!currentAssignment || !currentAssignment.child) {
+      setStatus('Cannot call: no active assignment or child profile missing.');
+      return;
+    }
+
+    try {
+      // Get the current user's ID (driver ID)
+      const driverId = 'driver_demo_id'; // In production, would be decoded from token
+
+      const call = await initiateCall({
+        callerId: driverId,
+        callerName: 'Driver',
+        receiverId: 'parent_demo_id', // In production, would be from assignment
+        receiverName: 'Parent',
+        direction: 'DRIVER_TO_PARENT',
+        childName: currentAssignment.child.name,
+      });
+
+      setActiveCall(call);
+      setCallModalVisible(true);
+
+      // Track analytics
+      track('call_initiated', {
+        direction: 'DRIVER_TO_PARENT',
+        childId: currentAssignment.child.id,
+      });
+
+      setStatus(`Calling parent of ${currentAssignment.child.name}...`);
+    } catch (error: any) {
+      setStatus(`Call failed: ${error.message}`);
+      console.error('Call error:', error);
+    }
+  }
+
+  function endCurrentCall() {
+    if (activeCall) {
+      endCall(activeCall.id);
+      track('call_ended', {
+        direction: activeCall.direction,
+        duration: callDuration,
+      });
+      setStatus(`Call ended. Duration: ${Math.floor(callDuration / 60)}:${String(callDuration % 60).padStart(2, '0')}`);
+      setTimeout(() => {
+        setCallModalVisible(false);
+        setActiveCall(null);
+        setCallDuration(0);
+      }, 1000);
+    }
+  }
+
   function getDayName(dayNum: number): string {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return days[dayNum] || '';
@@ -926,6 +1078,70 @@ export default function App() {
   if (screen === 'inbox') {
     return (
       <SafeAreaView style={styles.page}>
+        {/* Call Status Modal */}
+        <Modal
+          visible={callModalVisible && activeCall}
+          transparent
+          animationType="slide"
+          onRequestClose={() => {
+            if (activeCall?.status !== 'CONNECTED') {
+              setCallModalVisible(false);
+            }
+          }}
+        >
+          <View style={styles.callModalOverlay}>
+            <View style={styles.callModalContent}>
+              <Text style={styles.callModalTitle}>
+                {activeCall?.status === 'INITIATED' ? 'Calling...' : 'Connected'}
+              </Text>
+              <Text style={styles.callModalSubtitle}>
+                {activeCall?.receiverName || 'Parent'}
+              </Text>
+              {activeCall?.childName && (
+                <Text style={styles.callModalChild}>{activeCall.childName}</Text>
+              )}
+
+              <Text style={styles.callTimer}>
+                {Math.floor(callDuration / 60)}:{String(callDuration % 60).padStart(2, '0')}
+              </Text>
+
+              <Text style={styles.callStatus}>
+                {activeCall?.status === 'INITIATED' ? '[Calling...]' : '[Connected]'}
+              </Text>
+
+              {activeCall?.status === 'CONNECTED' && (
+                <TouchableOpacity
+                  style={styles.endCallButton}
+                  onPress={endCurrentCall}
+                >
+                  <Text style={styles.endCallButtonText}>End Call</Text>
+                </TouchableOpacity>
+              )}
+
+              {activeCall?.status === 'ENDED' && (
+                <View style={styles.callEndedInfo}>
+                  <Text style={styles.callEndedText}>
+                    Call ended
+                  </Text>
+                  <Text style={styles.callDurationText}>
+                    Duration: {Math.floor(callDuration / 60)}:{String(callDuration % 60).padStart(2, '0')}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.closeCallButton}
+                    onPress={() => {
+                      setCallModalVisible(false);
+                      setActiveCall(null);
+                      setCallDuration(0);
+                    }}
+                  >
+                    <Text style={styles.closeCallButtonText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Incoming requests</Text>
           <Text style={styles.bodyDark}>Accept only when seat capacity, institution fit, and route reality line up.</Text>
@@ -942,6 +1158,12 @@ export default function App() {
                     <Text style={styles.metric}>{item.child?.pickupAddress || 'Pickup missing'}</Text>
                     <Text style={styles.metric}>{item.child?.institutionName || 'Institution pending'}</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.callParentButton}
+                    onPress={callParent}
+                  >
+                    <Text style={styles.callParentButtonText}>📞</Text>
+                  </TouchableOpacity>
                   <Button title="Accept" onPress={() => handleAssignment('accept', item.id)} />
                   <Button title="Reject" onPress={() => handleAssignment('reject', item.id)} />
                 </View>
@@ -1315,6 +1537,49 @@ export default function App() {
     );
   }
 
+  if (screen === 'trip-history') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Trip History</Text>
+          <Text style={styles.bodyDark}>View all completed trips and attendance records.</Text>
+          {loading ? <ActivityIndicator color={colors.accent} /> : null}
+
+          {tripHistory.length ? (
+            <FlatList
+              data={tripHistory}
+              keyExtractor={(item) => item.tripId}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.cardInline}>
+                  <Text style={styles.cardTitle}>{new Date(item.date).toLocaleDateString()} - {item.tripType}</Text>
+                  <Text style={styles.metric}>Trip ID: {item.tripId}</Text>
+                  {item.children.length ? (
+                    <View>
+                      <Text style={styles.metric}>Children on this trip:</Text>
+                      {item.children.map((child) => (
+                        <View key={child.childId} style={{ marginLeft: 10 }}>
+                          <Text style={styles.metric}>• {child.childName}</Text>
+                          {child.boarded && <Text style={styles.metric}>  Boarded: {child.boarded}</Text>}
+                          {child.dropped && <Text style={styles.metric}>  Dropped: {child.dropped}</Text>}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              )}
+            />
+          ) : (
+            <EmptyState title="No trip history" body="Trips will appear here as you complete them." />
+          )}
+
+          <Button title="Refresh history" onPress={loadTripHistory} />
+          <Button title="Back to dashboard" onPress={() => setScreen('trip')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.stack}>
@@ -1389,6 +1654,7 @@ export default function App() {
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
           <Button title="Driver Verification" onPress={() => { loadVerification(); setScreen('verification'); }} color={colors.accent} />
           <Button title="My Services" onPress={() => { loadServices(); setScreen('services'); }} color={colors.accent} />
+          <Button title="Trip History" onPress={() => { loadTripHistory(); setScreen('trip-history'); }} color={colors.accent} />
           <Button title="Success Stories" onPress={() => setScreen('success-stories')} color={colors.accent} />
           <Button title="Leaderboard" onPress={() => setScreen('leaderboard')} color={colors.accent} />
           <Button title="Route Analytics" onPress={() => setScreen('analytics')} color={colors.accent} />
@@ -1396,6 +1662,38 @@ export default function App() {
           <Button title="Sign out" onPress={signOut} />
         </View>
       </ScrollView>
+      {showUnavailableModal && (
+        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ ...styles.cardInline, width: '85%', maxWidth: 400 }}>
+            <Text style={styles.cardTitle}>Why are you unavailable?</Text>
+            <View style={{ gap: 10 }}>
+              {(['SICK', 'ACCIDENT', 'EMERGENCY', 'OTHER'] as SubstituteReason[]).map((reason) => (
+                <View key={reason} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Button
+                    title={reason}
+                    onPress={() => setUnavailableReason(reason)}
+                    color={unavailableReason === reason ? '#2196F3' : '#999'}
+                  />
+                </View>
+              ))}
+            </View>
+            <Text style={styles.bodyDark}>Selected: {unavailableReason}</Text>
+            <View style={{ gap: 8 }}>
+              <Button
+                title={findingBackup ? 'Finding backup...' : 'Confirm unavailable'}
+                onPress={markUnavailable}
+                disabled={findingBackup}
+                color="#d32f2f"
+              />
+              <Button
+                title="Cancel"
+                onPress={() => setShowUnavailableModal(false)}
+                color="#999"
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -1458,4 +1756,99 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actions: { gap: 10, paddingBottom: 24 },
+  callParentButton: {
+    backgroundColor: '#22c55e',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callParentButtonText: {
+    fontSize: 20,
+  },
+  callModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
+  },
+  callModalContent: {
+    backgroundColor: colors.panel,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 32,
+    paddingBottom: 48,
+    gap: 16,
+    alignItems: 'center',
+  },
+  callModalTitle: {
+    color: colors.ink,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  callModalSubtitle: {
+    color: colors.muted,
+    fontSize: 16,
+  },
+  callModalChild: {
+    color: colors.accent,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  callTimer: {
+    color: colors.ink,
+    fontSize: 48,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    marginVertical: 16,
+  },
+  callStatus: {
+    color: '#22c55e',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  endCallButton: {
+    backgroundColor: '#dc2626',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginTop: 24,
+    minWidth: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  endCallButtonText: {
+    color: colors.panel,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  callEndedInfo: {
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+  },
+  callEndedText: {
+    color: colors.muted,
+    fontSize: 16,
+  },
+  callDurationText: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  closeCallButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    marginTop: 12,
+    minWidth: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeCallButtonText: {
+    color: colors.panel,
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

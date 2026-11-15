@@ -1459,4 +1459,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  badgeRow: { flexDirection: 'row', gap: 8, marginVertical: 8 },
+  badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' },
+  verifiedBadge: { backgroundColor: '#d4edda', borderWidth: 1, borderColor: '#28a745' },
+  pendingBadge: { backgroundColor: '#fff3cd', borderWidth: 1, borderColor: '#ffc107' },
+  unverifiedBadge: { backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#ccc' },
+  badgeText: { fontSize: 12, fontWeight: '600', color: colors.ink },
 });
