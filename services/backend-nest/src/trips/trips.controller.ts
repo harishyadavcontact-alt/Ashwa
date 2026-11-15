@@ -1,246 +1,131 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Logger,
-  NotFoundException,
-  Param,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-  UsePipes,
-} from '@nestjs/common';
-import { TripStartSchema } from '@ashwa/shared';
-import { PrismaService } from '../prisma.service';
-import { JwtAuthGuard } from '../common/jwt-auth.guard';
-import { RolesGuard } from '../common/roles.guard';
-import { Roles } from '../common/roles.decorator';
-import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { summarizeDriverTrust } from '../drivers/driver-trust';
-import { presentTripState } from '../current-state/presenters';
+import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { dummyStore } from '../dummy-store';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Controller('trips')
+interface LocationUpdate {
+  tripId: string;
+  driverId: string;
+  lat: number;
+  lng: number;
+  timestamp: number;
+}
+
+// Simple in-memory store for current location
+const tripLocations: Map<string, LocationUpdate> = new Map();
+
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  // Haversine formula (returns km)
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+@Controller('api/trips')
 export class TripsController {
-  private readonly logger = new Logger(TripsController.name);
-
-  constructor(private prisma: PrismaService) {}
-
-  @Roles('DRIVER')
   @Post('start')
-  @UsePipes(new ZodValidationPipe(TripStartSchema))
-  async start(@Req() req: any, @Body() body: { tripType: 'MORNING' | 'AFTERNOON' }) {
-    const driver = await this.prisma.driverProfile.findUnique({
-      where: { userId: req.user.userId },
-      include: { vehicle: true, institutions: true },
-    });
-    if (!driver || !summarizeDriverTrust(driver as any).isServiceReady) {
-      throw new BadRequestException('Driver profile is not service-ready');
-    }
-
-    const activeTrip = await this.prisma.trip.findFirst({
-      where: {
-        status: 'ACTIVE',
-        routeTemplate: { driverId: req.user.userId },
-        tripType: body.tripType,
-      },
-      include: {
-        stops: { include: { child: true } },
-        events: { include: { child: true } },
-        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
-      },
-      orderBy: { startedAt: 'desc' },
-    });
-    if (activeTrip) {
-      return presentTripState(activeTrip);
-    }
-
-    const assignments = await this.prisma.assignment.findMany({
-      where: { driverId: req.user.userId, status: 'ACCEPTED' },
-      include: { child: { include: { institution: true } } },
-    });
-    if (!assignments.length) return { message: 'No accepted assignments' };
-
-    const institutionId = assignments[0].child.institutionId;
-    const routeTemplateId = `${req.user.userId}-${institutionId}-${body.tripType}`;
-    const rt = await this.prisma.routeTemplate.upsert({
-      where: { id: routeTemplateId },
-      update: {},
-      create: {
-        id: routeTemplateId,
-        driverId: req.user.userId,
-        institutionId,
-        tripType: body.tripType,
-      },
-    });
-
-    const trip = await this.prisma.trip.create({
-      data: { routeTemplateId: rt.id, date: new Date(), tripType: body.tripType, status: 'ACTIVE' },
-    });
-
-    const stops =
-      body.tripType === 'MORNING'
-        ? [
-            ...assignments.map((a) => ({
-              stopType: 'PICKUP',
-              childId: a.child.id,
-              lat: a.child.pickupLat,
-              lng: a.child.pickupLng,
-              address: a.child.pickupAddress,
-            })),
-            {
-              stopType: 'SCHOOL',
-              childId: null,
-              lat: assignments[0].child.institution.lat,
-              lng: assignments[0].child.institution.lng,
-              address: assignments[0].child.institution.address,
-            },
-          ]
-        : [
-            {
-              stopType: 'SCHOOL',
-              childId: null,
-              lat: assignments[0].child.institution.lat,
-              lng: assignments[0].child.institution.lng,
-              address: assignments[0].child.institution.address,
-            },
-            ...assignments.map((a) => ({
-              stopType: 'DROP',
-              childId: a.child.id,
-              lat: a.child.dropLat,
-              lng: a.child.dropLng,
-              address: a.child.dropAddress,
-            })),
-          ];
-
-    await this.prisma.tripStop.createMany({
-      data: stops.map((s, i) => ({ ...s, stopType: s.stopType as any, tripId: trip.id, sequenceIndex: i })),
-    });
-    this.logger.log(`trip start: ${trip.id}`);
-    const currentTrip = await this.prisma.trip.findUnique({
-      where: { id: trip.id },
-      include: {
-        stops: { include: { child: true } },
-        events: { include: { child: true } },
-        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
-      },
-    });
-    return presentTripState(currentTrip);
+  startTrip(
+    @Body()
+    body: {
+      tripId: string;
+      driverId: string;
+      stops: Array<{ school: string; lat: number; lng: number }>;
+    },
+  ) {
+    dummyStore.startTrip(body.tripId);
+    return { success: true, tripId: body.tripId, message: 'Trip started' };
   }
 
-  @Roles('DRIVER')
-  @Post(':id/end')
-  async end(@Req() req: any, @Param('id') id: string) {
-    const existing = await this.prisma.trip.findFirst({
-      where: { id, routeTemplate: { driverId: req.user.userId }, status: 'ACTIVE' },
+  @Post('location')
+  updateLocation(
+    @Body()
+    body: {
+      tripId: string;
+      lat: number;
+      lng: number;
+    },
+  ) {
+    tripLocations.set(body.tripId, {
+      tripId: body.tripId,
+      driverId: '',
+      lat: body.lat,
+      lng: body.lng,
+      timestamp: Date.now(),
     });
-    if (!existing) {
-      throw new NotFoundException('Active trip not found');
-    }
 
-    const trip = await this.prisma.trip.update({
-      where: { id },
-      data: { status: 'ENDED', endedAt: new Date() },
-    });
-    this.logger.log(`trip end: ${trip.id}`);
-    return trip;
+    return { success: true };
   }
 
-  @Get('current')
-  async current(@Req() req: any, @Query('tripType') tripType?: 'MORNING' | 'AFTERNOON') {
-    if (req.user.role === 'DRIVER') {
-      const trip = await this.prisma.trip.findFirst({
-        where: {
-          routeTemplate: { driverId: req.user.userId },
-          ...(tripType ? { tripType } : {}),
-          status: 'ACTIVE',
-        },
-        include: {
-          stops: { include: { child: true } },
-          events: { include: { child: true } },
-          pings: { orderBy: { timestamp: 'desc' }, take: 1 },
-        },
-        orderBy: { startedAt: 'desc' },
-      });
-      return presentTripState(trip);
-    }
-
-    const visibleChildren = await this.prisma.child.findMany({
-      where: { parentId: req.user.userId },
-      select: { id: true },
-    });
-    const trip = await this.prisma.trip.findFirst({
-      where: {
-        status: 'ACTIVE',
-        stops: { some: { child: { parentId: req.user.userId } } },
-        ...(tripType ? { tripType } : {}),
-      },
-      include: {
-        stops: { include: { child: true } },
-        events: { include: { child: true } },
-        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
-      },
-      orderBy: { startedAt: 'desc' },
-    });
-    return presentTripState(trip, visibleChildren.map((child) => child.id));
-  }
-
-  @Get(':id/timeline')
-  async timeline(@Req() req: any, @Param('id') id: string) {
-    const trip = await this.prisma.trip.findFirst({
-      where:
-        req.user.role === 'DRIVER'
-          ? { id, routeTemplate: { driverId: req.user.userId } }
-          : { id, stops: { some: { child: { parentId: req.user.userId } } } },
-      include: {
-        stops: { include: { child: true } },
-        events: { include: { child: true } },
-        pings: { orderBy: { timestamp: 'desc' }, take: 1 },
-      },
-    });
+  @Get('eta/:tripId')
+  getETA(@Param('tripId') tripId: string) {
+    const trip = dummyStore.getTrip(tripId);
     if (!trip) {
-      throw new NotFoundException('Trip not found');
+      return { error: 'Trip not found', statusCode: 404 };
     }
 
-    const visibleChildren =
-      req.user.role === 'PARENT'
-        ? (
-            await this.prisma.child.findMany({
-              where: { parentId: req.user.userId },
-              select: { id: true },
-            })
-          ).map((child) => child.id)
-        : undefined;
+    // Get current location
+    const location = tripLocations.get(tripId);
+    if (!location) {
+      return {
+        eta: null,
+        status: 'Starting',
+        message: 'Trip in progress',
+        locationLastUpdated: null,
+      };
+    }
 
-    const state = presentTripState(trip, visibleChildren);
+    // Check if location is stale (>1 min)
+    const timeSinceUpdate = Date.now() - location.timestamp;
+    if (timeSinceUpdate > 60000) {
+      return {
+        eta: null,
+        status: 'En route',
+        message: 'Location updated 1 min ago',
+        locationLastUpdated: new Date(location.timestamp),
+      };
+    }
+
+    // Find next stop
+    const nextStop = trip.stops.find((s) => !s.arrivalTime);
+    if (!nextStop) {
+      return {
+        eta: null,
+        status: 'All stops completed',
+        message: 'Trip complete',
+        locationLastUpdated: new Date(location.timestamp),
+      };
+    }
+
+    // Calculate ETA: distance / 25 km/h (city speed)
+    const distanceKm = calculateDistance(location.lat, location.lng, nextStop.lat, nextStop.lng);
+    const etaMinutes = Math.round(distanceKm / 25) * 60; // Convert to seconds
+
     return {
-      tripId: state.trip?.id || id,
-      timeline: state.timeline,
+      eta: Math.max(1, Math.round(etaMinutes / 60)), // Return in minutes, min 1
+      status: 'En route',
+      nextStop: nextStop.school,
+      distanceKm: distanceKm.toFixed(1),
+      locationLastUpdated: new Date(location.timestamp),
     };
   }
 
-  @Get('today')
-  async today(@Req() req: any, @Query('childId') childId?: string) {
-    if (req.user.role === 'DRIVER') {
-      return this.prisma.trip.findMany({
-        where: { routeTemplate: { driverId: req.user.userId } },
-        orderBy: { startedAt: 'desc' },
-        take: 1,
-        include: { stops: true, events: true },
-      });
-    }
+  @Post('arrival')
+  recordArrival(
+    @Body()
+    body: {
+      tripId: string;
+      stopIndex: number;
+    },
+  ) {
+    dummyStore.recordStopArrival(body.tripId, body.stopIndex);
+    return { success: true, message: 'Stop arrival recorded' };
+  }
 
-    if (req.user.role === 'PARENT') {
-      return this.prisma.trip.findMany({
-        where: { stops: { some: { child: { parentId: req.user.userId }, ...(childId ? { childId } : {}) } } },
-        include: { stops: true, events: true },
-        orderBy: { startedAt: 'desc' },
-        take: 1,
-      });
-    }
-
-    return [];
+  @Post('end')
+  endTrip(@Body() body: { tripId: string }) {
+    dummyStore.endTrip(body.tripId);
+    tripLocations.delete(body.tripId);
+    return { success: true, message: 'Trip ended' };
   }
 }

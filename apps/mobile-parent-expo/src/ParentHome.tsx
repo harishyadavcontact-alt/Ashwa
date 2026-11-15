@@ -113,11 +113,44 @@ export function ParentHome({
     return 'Needs assignment';
   };
 
-  // Get ETA - simple demo value
-  const getETA = (): string => {
-    if (!trip || trip.status !== 'ACTIVE') return '—';
-    return '8 min';
-  };
+  // Get ETA - fetch from backend
+  const [eta, setEta] = useState<string>('—');
+  const [etaLastUpdated, setEtaLastUpdated] = useState<Date | null>(null);
+
+  const getETA = (): string => eta;
+
+  // Fetch real ETA from backend
+  useEffect(() => {
+    if (!trip || trip.status !== 'ACTIVE') {
+      setEta('—');
+      return;
+    }
+
+    const fetchETA = async () => {
+      try {
+        // TODO: Replace with actual API endpoint using trip.id
+        const tripId = trip.id || 'demo-trip';
+        const response = await fetch(`http://localhost:3000/api/trips/eta/${tripId}`);
+        const data = await response.json();
+
+        if (data.eta) {
+          setEta(`${data.eta} min`);
+        } else if (data.status === 'En route') {
+          setEta('En route');
+        } else {
+          setEta(data.status || '—');
+        }
+        setEtaLastUpdated(new Date());
+      } catch (error) {
+        // Fallback to "En route" if API is unavailable
+        setEta('En route');
+      }
+    };
+
+    fetchETA();
+    const etaInterval = setInterval(fetchETA, MAP_UPDATE_INTERVAL);
+    return () => clearInterval(etaInterval);
+  }, [trip?.id, trip?.status]);
 
   // Update map animation
   useEffect(() => {

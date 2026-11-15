@@ -1,83 +1,85 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  UseGuards,
-  UsePipes,
-  BadRequestException,
-} from '@nestjs/common';
-import { JwtAuthGuard } from '../common/jwt-auth.guard';
-import { RolesGuard } from '../common/roles.guard';
-import { Roles } from '../common/roles.decorator';
-import { CurrentUser } from '../common/current-user.decorator';
-import { AuthUser, PaymentRecordInput, PaymentRecordSchema } from '@ashwa/shared';
-import { ZodValidationPipe } from '../common/zod-validation.pipe';
-import { ReferralsService } from './referrals.service';
-import { z } from 'zod';
+import { Controller, Post, Body, Get, Param } from '@nestjs/common';
+import { dummyStore } from '../dummy-store';
 
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('PARENT')
-@Controller('referrals')
+@Controller('api/referrals')
 export class ReferralsController {
-  constructor(private referralsService: ReferralsService) {}
-
-  @Get('code')
-  async getReferralCode(@CurrentUser() user: AuthUser) {
-    const code = await this.referralsService.generateReferralCode(user.userId);
-    return { referralCode: code };
-  }
-
-  @Post('register')
-  async registerReferral(
-    @CurrentUser() user: AuthUser,
-    @Body() body: { referralCode: string },
+  @Post('send')
+  sendReferral(
+    @Body()
+    body: {
+      parentPhone: string;
+      sentToPhone?: string; // optional: phone that was shared to
+    },
   ) {
-    if (!body.referralCode) {
-      throw new BadRequestException('Referral code is required');
+    try {
+      dummyStore.logReferralSend(body.parentPhone, body.sentToPhone);
+      return { success: true, message: 'Referral logged' };
+    } catch (e) {
+      return { error: (e as Error).message, statusCode: 400 };
     }
-    await this.referralsService.registerReferral(body.referralCode, user.userId, body.referralCode);
-    return { success: true };
   }
 
-  @Post('link-child')
-  async linkChildToReferral(
-    @Body() body: { childId: string; referralCode: string },
+  @Post('claim')
+  claimReferral(
+    @Body()
+    body: {
+      referralCode: string;
+      parentPhone: string;
+      name: string;
+      email?: string;
+      childName: string;
+      school: string;
+      pickupLat: number;
+      pickupLng: number;
+      dropLat: number;
+      dropLng: number;
+    },
   ) {
-    if (!body.childId || !body.referralCode) {
-      throw new BadRequestException('childId and referralCode are required');
+    try {
+      const { parent, referrer } = dummyStore.claimReferral(body.referralCode, body.parentPhone, {
+        name: body.name,
+        email: body.email,
+        childName: body.childName,
+        school: body.school,
+        pickupLat: body.pickupLat,
+        pickupLng: body.pickupLng,
+        dropLat: body.dropLat,
+        dropLng: body.dropLng,
+      });
+
+      return {
+        success: true,
+        parent,
+        referrer,
+        message: `Welcome ${parent.name}! Your referrer ${referrer?.name} will earn ₹200.`,
+      };
+    } catch (e) {
+      return { error: (e as Error).message, statusCode: 400 };
     }
-    await this.referralsService.linkChildToReferral(body.childId, body.referralCode);
-    return { success: true };
   }
 
-  @Post('record-payment')
-  @UsePipes(new ZodValidationPipe(PaymentRecordSchema))
-  async recordPayment(
-    @CurrentUser() user: AuthUser,
-    @Body() body: PaymentRecordInput,
-  ) {
-    // Verify the child belongs to the user
-    // This would be done in a proper implementation with authorization checks
-    await this.referralsService.recordPayment(
-      body.childId,
-      body.month,
-      body.year,
-      body.amount,
-      body.status,
-    );
-    return { success: true };
+  @Get('earnings/:parentPhone')
+  getEarnings(@Param('parentPhone') parentPhone: string) {
+    const earnings = dummyStore.getEarnings(decodeURIComponent(parentPhone));
+    return earnings;
   }
 
-  @Get('stats')
-  async getReferralStats(@CurrentUser() user: AuthUser) {
-    const stats = await this.referralsService.getParentReferralStats(user.userId);
+  @Get('stats/:parentPhone')
+  getStats(@Param('parentPhone') parentPhone: string) {
+    const stats = dummyStore.getReferralStats(decodeURIComponent(parentPhone));
     return stats;
   }
 
-  @Get('earnings')
-  async getMyEarnings(@CurrentUser() user: AuthUser) {
-    const earnings = await this.referralsService.getMyReferralEarnings(user.userId);
-    return { totalEarnings: earnings };
+  @Get('code/:parentPhone')
+  getReferralCode(@Param('parentPhone') parentPhone: string) {
+    const parent = dummyStore.getParent(decodeURIComponent(parentPhone));
+    if (!parent) {
+      return { error: 'Parent not found', statusCode: 404 };
+    }
+
+    return {
+      code: parent.referralCode,
+      whatsappMessage: `I'm using Ashwa to track my child's pickup/drop. Join me! ashwa.app/join?referral=${parent.referralCode}`,
+    };
   }
 }
