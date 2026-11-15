@@ -332,6 +332,10 @@ function CustomersTab({
   if (!adding) {
     return (
       <div className="stack">
+        <section style={{ padding: '12px 14px', background: '#fffbea', borderRadius: 12, borderLeft: '4px solid #ffc72c' }}>
+          <strong style={{ color: '#1e8e4e' }}>✓ Your families</strong>
+          <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>They won't see offers from other drivers. Only you manage their pickups and drops.</p>
+        </section>
         <button type="button" className="btn primary full" onClick={() => setAdding(true)}>
           <Icon name="plus" /> Add customer
         </button>

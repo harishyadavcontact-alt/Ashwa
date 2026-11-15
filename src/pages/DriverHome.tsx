@@ -86,6 +86,10 @@ export default function DriverHome() {
       </header>
 
       <main className="screen stack">
+        <section className="card" style={{ background: '#fffbea', borderColor: '#ffc72c' }}>
+          <strong style={{ color: '#1e8e4e' }}>✓ Your families stay yours</strong>
+          <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>They won't see offers from other drivers. You manage their pickups.</p>
+        </section>
         {message && <p className="error">{message}</p>}
 
         {week && (
