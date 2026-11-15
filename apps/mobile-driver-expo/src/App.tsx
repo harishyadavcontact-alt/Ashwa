@@ -1,5 +1,5 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType, Job, TeamMember, PayrollRecord, Route } from '@ashwa/shared';
-import { sendWhatsAppAlert } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, DriverVerification, EventType, Job, TeamMember, PayrollRecord, Route, Service, ServiceType, SubstituteReason, SubstituteAssignment, DriverAvailability, CallRecordData } from '@ashwa/shared';
+import { sendWhatsAppAlert, sendSubstituteNotification, sendBackupBonusNotification, sendRefundNotification, initiateCall, endCall, getActiveCall } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -7,19 +7,24 @@ import {
   ActivityIndicator,
   Button,
   FlatList,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { api } from './api';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { SuccessStoriesScreen } from './SuccessStoriesScreen';
+import { AnalyticsScreen } from './AnalyticsScreen';
+import { VerificationBadge } from './VerificationBadge';
+import { VerificationForm } from './VerificationForm';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'analytics' | 'trip-history';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -75,6 +80,39 @@ export default function App() {
     { id: '4', school: 'School C', direction: 'Evening East', time: '04:00 PM' },
   ]);
 
+  // Multi-Service Routing state
+  const [services, setServices] = useState<Service[]>([]);
+  const [serviceDraft, setServiceDraft] = useState({
+    name: '',
+    type: 'SCHOOL' as ServiceType,
+    startTime: '07:00',
+    endTime: '09:00',
+    lat: 12.97,
+    lng: 77.59,
+    daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
+    capacity: 12,
+    pricePerMonth: 3000,
+  });
+
+  // Driver Verification state
+  const [verification, setVerification] = useState<DriverVerification | null>(null);
+
+  // Substitute Driver Assignment state
+  const [showUnavailableModal, setShowUnavailableModal] = useState(false);
+  const [unavailableReason, setUnavailableReason] = useState<SubstituteReason>('SICK');
+  const [substitutes, setSubstitutes] = useState<SubstituteAssignment[]>([]);
+  const [availableBackups, setAvailableBackups] = useState<DriverAvailability[]>([]);
+  const [currentSubstitute, setCurrentSubstitute] = useState<SubstituteAssignment | null>(null);
+  const [findingBackup, setFindingBackup] = useState(false);
+
+  // Trip History state
+  const [tripHistory, setTripHistory] = useState<Array<{ tripId: string; tripType: string; date: string; children: Array<{ childId: string; childName: string; boarded?: string; dropped?: string }> }>>([]);
+
+  // Voice Calling state
+  const [activeCall, setActiveCall] = useState<CallRecordData | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [callModalVisible, setCallModalVisible] = useState(false);
+
   const incoming = incomingState?.items || [];
   const accepted = assignmentState?.items || [];
   const trip = tripState?.trip || null;
@@ -87,7 +125,108 @@ export default function App() {
       setScreen('trip');
     });
     bootstrapLocationMode();
+    initializeDemoServices();
+    initializeDemoVerifications();
   }, []);
+
+  async function initializeDemoServices() {
+    try {
+      const existingServices = await AsyncStorage.getItem('ashwa.services');
+      if (!existingServices) {
+        // Initialize demo services
+        const demoServices: Service[] = [
+          {
+            id: 'demo-1',
+            driverId: 'demo-driver',
+            name: 'St. Xavier School',
+            type: 'SCHOOL',
+            startTime: '07:00',
+            endTime: '09:00',
+            location: { lat: 12.97, lng: 77.59 },
+            daysOfWeek: [1, 2, 3, 4, 5],
+            capacity: 12,
+            pricePerMonth: 3000,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'demo-2',
+            driverId: 'demo-driver',
+            name: 'Math Tuition',
+            type: 'TUITION',
+            startTime: '15:00',
+            endTime: '17:00',
+            location: { lat: 12.98, lng: 77.60 },
+            daysOfWeek: [1, 3, 5],
+            capacity: 8,
+            pricePerMonth: 2000,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'demo-3',
+            driverId: 'demo-driver',
+            name: 'Dance Academy',
+            type: 'DANCE',
+            startTime: '17:30',
+            endTime: '19:00',
+            location: { lat: 12.96, lng: 77.58 },
+            daysOfWeek: [2, 4, 6],
+            capacity: 10,
+            pricePerMonth: 1500,
+            status: 'ACTIVE',
+            createdAt: new Date().toISOString(),
+          },
+        ];
+        await AsyncStorage.setItem('ashwa.services', JSON.stringify(demoServices));
+        setServices(demoServices);
+      } else {
+        const loaded = JSON.parse(existingServices);
+        setServices(loaded);
+      }
+    } catch (error: any) {
+      console.error('Failed to initialize services:', error);
+    }
+  }
+
+  async function initializeDemoVerifications() {
+    try {
+      const existingVerifications = await AsyncStorage.getItem('ashwa.verifications');
+      if (!existingVerifications) {
+        // Load current driver verification from demo data
+        const demoVerification: DriverVerification = {
+          id: 'demo-verification',
+          driverId: 'demo-driver',
+          licenseNumber: 'DL-1234567890',
+          licenseExpiry: '2026-12-31',
+          insuranceDocUrl: 'https://demo.supabase.co/insurance.pdf',
+          policyNumber: 'POL-9876543210',
+          insuranceExpiry: '2027-06-30',
+          policeCheckDone: true,
+          status: 'APPROVED',
+          approvedAt: new Date(Date.now() - 6 * 30 * 24 * 60 * 60 * 1000).toISOString(), // 6 months ago
+          approvedBy: 'admin-1',
+        };
+        await AsyncStorage.setItem('ashwa.verifications', JSON.stringify(demoVerification));
+        setVerification(demoVerification);
+      } else {
+        const loaded = JSON.parse(existingVerifications);
+        setVerification(loaded);
+      }
+    } catch (error: any) {
+      console.error('Failed to initialize verifications:', error);
+    }
+  }
+
+  async function loadServices() {
+    try {
+      const stored = await AsyncStorage.getItem('ashwa.services');
+      const serviceList: Service[] = stored ? JSON.parse(stored) : [];
+      setServices(serviceList);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load services.');
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -136,6 +275,15 @@ export default function App() {
       setDriverSummary(summary);
     } catch (error: any) {
       setStatus(error.message || 'Could not refresh driver state.');
+    }
+  }
+
+  async function loadTripHistory() {
+    try {
+      const history = await api.getTripHistory(token, 30);
+      setTripHistory(history);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load trip history.');
     }
   }
 
@@ -199,6 +347,59 @@ export default function App() {
       setStatus(`Assignment ${action}ed.`);
     } catch (error: any) {
       setStatus(error.message || `Could not ${action} assignment.`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadVerification() {
+    try {
+      const stored = await AsyncStorage.getItem('ashwa.verifications');
+      if (stored) {
+        const loaded = JSON.parse(stored);
+        setVerification(loaded);
+      } else {
+        setVerification(null);
+      }
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load verification status.');
+    }
+  }
+
+  async function submitVerification(data: {
+    licenseNumber: string;
+    licenseExpiry: string;
+    policyNumber: string;
+    insuranceExpiry: string;
+    policeCheckDone: boolean;
+  }) {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const newVerification: DriverVerification = {
+        id: Math.random().toString(36).substr(2, 9),
+        driverId: token,
+        licenseNumber: data.licenseNumber,
+        licenseExpiry: data.licenseExpiry,
+        insuranceDocUrl: 'https://demo.supabase.co/insurance.pdf',
+        policyNumber: data.policyNumber,
+        insuranceExpiry: data.insuranceExpiry,
+        policeCheckDone: data.policeCheckDone,
+        status: 'PENDING',
+        submittedAt: new Date().toISOString(),
+      };
+
+      // Save to localStorage (demo)
+      await AsyncStorage.setItem('ashwa.verifications', JSON.stringify(newVerification));
+      setVerification(newVerification);
+
+      // Analytics tracking
+      console.log('[Analytics] track("verification_submitted", {documents: 2})');
+
+      setStatus('Verification submitted! Your documents are under admin review.');
+      setScreen('trip');
+    } catch (error: any) {
+      setStatus(error.message || 'Could not submit verification.');
     } finally {
       setLoading(false);
     }
@@ -283,6 +484,112 @@ export default function App() {
     setAssignmentState(null);
     setTripState(null);
     setDriverSummary(null);
+  }
+
+  // Substitute Driver Assignment functions
+  async function markUnavailable() {
+    if (!token || !trip?.id) {
+      setStatus('No active trip. Cannot mark unavailable.');
+      return;
+    }
+    setFindingBackup(true);
+    setStatus('Finding backup driver...');
+    try {
+      // In demo mode, store the unavailability
+      const availability: DriverAvailability = {
+        id: Math.random().toString(36).substr(2, 9),
+        driverId: token,
+        date: new Date(),
+        available: false,
+        reason: unavailableReason,
+        routesCoveringCount: 0,
+      };
+
+      // Store in localStorage for demo
+      const storedAvailability = await AsyncStorage.getItem('ashwa.availability');
+      const availabilityList: DriverAvailability[] = storedAvailability ? JSON.parse(storedAvailability) : [];
+      availabilityList.push(availability);
+      await AsyncStorage.setItem('ashwa.availability', JSON.stringify(availabilityList));
+
+      // Find backup driver (demo logic)
+      const backup = await findBackupDriverForService();
+
+      if (backup) {
+        // Create substitute assignment
+        const assignment: SubstituteAssignment = {
+          id: Math.random().toString(36).substr(2, 9),
+          originalDriverId: token,
+          backupDriverId: backup.driverId,
+          serviceId: trip.id,
+          date: new Date(),
+          reason: unavailableReason,
+          backupFee: 200,
+          status: 'PENDING',
+        };
+        setCurrentSubstitute(assignment);
+
+        // Store assignment
+        const stored = await AsyncStorage.getItem('ashwa.substitutes');
+        const list: SubstituteAssignment[] = stored ? JSON.parse(stored) : [];
+        list.push(assignment);
+        await AsyncStorage.setItem('ashwa.substitutes', JSON.stringify(list));
+        setSubstitutes(list);
+
+        // Send notifications
+        await sendSubstituteNotification({
+          parentPhoneNumber: '+919876543210',
+          backupDriverName: 'Priya',
+          backupDriverVerified: true,
+          childName: 'Student',
+          schoolName: 'School A',
+        });
+
+        await sendBackupBonusNotification({
+          backupPhoneNumber: '+919876543211',
+          backupDriverName: 'Priya',
+          schoolName: 'School A',
+          bonusAmount: 200,
+        });
+
+        setStatus('✓ Backup assigned: Priya for School A today');
+      } else {
+        // No backup found - issue refund
+        await sendRefundNotification({
+          parentPhoneNumber: '+919876543210',
+          childName: 'Student',
+          refundAmount: 50,
+          schoolName: 'School A',
+        });
+        setStatus('No backup available. Parent has been notified and refunded ₹50.');
+      }
+
+      setShowUnavailableModal(false);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not mark unavailable.');
+    } finally {
+      setFindingBackup(false);
+    }
+  }
+
+  async function findBackupDriverForService(): Promise<DriverAvailability | null> {
+    try {
+      // Demo logic: randomly find a backup (50% chance)
+      const hasBackup = Math.random() > 0.5;
+      if (hasBackup) {
+        const backup: DriverAvailability = {
+          id: 'backup-1',
+          driverId: 'backup-driver-priya',
+          date: new Date(),
+          available: true,
+          routesCoveringCount: 1,
+        };
+        return backup;
+      }
+      return null;
+    } catch (error: any) {
+      console.error('Error finding backup:', error);
+      return null;
+    }
   }
 
   // Hiring system functions
@@ -467,6 +774,71 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function createService() {
+    if (!serviceDraft.name || !serviceDraft.startTime || !serviceDraft.endTime) {
+      setStatus('Please fill in all required fields.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const stored = await AsyncStorage.getItem('ashwa.services');
+      const serviceList: Service[] = stored ? JSON.parse(stored) : [];
+
+      const newService: Service = {
+        id: Math.random().toString(36).substr(2, 9),
+        driverId: token || 'demo-driver',
+        name: serviceDraft.name,
+        type: serviceDraft.type,
+        startTime: serviceDraft.startTime,
+        endTime: serviceDraft.endTime,
+        location: { lat: serviceDraft.lat, lng: serviceDraft.lng },
+        daysOfWeek: serviceDraft.daysOfWeek,
+        capacity: serviceDraft.capacity,
+        pricePerMonth: serviceDraft.pricePerMonth,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString(),
+      };
+
+      serviceList.push(newService);
+      await AsyncStorage.setItem('ashwa.services', JSON.stringify(serviceList));
+
+      // Track analytics
+      track('service_created', {
+        type: serviceDraft.type,
+        daysOfWeek: serviceDraft.daysOfWeek.length,
+      });
+
+      setServices(serviceList);
+      setServiceDraft({
+        name: '',
+        type: 'SCHOOL',
+        startTime: '07:00',
+        endTime: '09:00',
+        lat: 12.97,
+        lng: 77.59,
+        daysOfWeek: [1, 2, 3, 4, 5],
+        capacity: 12,
+        pricePerMonth: 3000,
+      });
+      setScreen('services');
+      setStatus('Service created successfully!');
+    } catch (error: any) {
+      setStatus(error.message || 'Could not create service.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function track(event: string, properties: Record<string, any>) {
+    // Analytics tracking function - logs to console in demo mode
+    console.log(`[Analytics] ${event}:`, properties);
+  }
+
+  function getDayName(dayNum: number): string {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[dayNum] || '';
   }
 
   const nextAction = useMemo(() => {
@@ -765,6 +1137,160 @@ export default function App() {
     );
   }
 
+  // Route Analytics Screen
+  if (screen === 'analytics') {
+    return (
+      <AnalyticsScreen
+        token={token}
+        onNavigate={(nextScreen) => setScreen(nextScreen as Screen)}
+      />
+    );
+  }
+
+  // Driver Verification Screen
+  if (screen === 'verification') {
+    return (
+      <VerificationForm
+        token={token}
+        driverId={driverSummary?.id || 'demo-driver'}
+        currentVerification={verification}
+        onSubmit={submitVerification}
+        onBack={() => setScreen('trip')}
+      />
+    );
+  }
+
+  // My Services Screen
+  if (screen === 'services') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>My Services</Text>
+          <Text style={styles.bodyDark}>Create multiple routes to increase revenue: morning school, afternoon tuition, evening dance.</Text>
+          {loading ? <ActivityIndicator color={colors.accent} /> : null}
+          {services.length > 0 ? (
+            <FlatList
+              data={services}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{item.name}</Text>
+                    <Text style={styles.metric}>
+                      {item.startTime} - {item.endTime} | {item.daysOfWeek.map((d) => getDayName(d).substring(0, 3)).join(', ')}
+                    </Text>
+                    <Text style={styles.metric}>₹{item.pricePerMonth}/month | {item.capacity} seats</Text>
+                  </View>
+                </View>
+              )}
+            />
+          ) : (
+            <EmptyState title="No services yet" body="Create your first service to start offering multiple routes." />
+          )}
+          <View style={styles.actions}>
+            <Button title="+ New Service" onPress={() => setScreen('create-service')} color={colors.accent} />
+            <Button title="Trip dashboard" onPress={() => setScreen('trip')} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Create Service Screen
+  if (screen === 'create-service') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Create Service</Text>
+          <Text style={styles.bodyDark}>Add a new route to your van for same-day multi-service operations.</Text>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Service name</Text>
+            <TextInput
+              value={serviceDraft.name}
+              onChangeText={(value) => setServiceDraft({ ...serviceDraft, name: value })}
+              placeholder="e.g., St. Xavier School"
+              style={styles.input}
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Service type</Text>
+            {(['SCHOOL', 'TUITION', 'DANCE', 'SPORTS', 'OTHER'] as ServiceType[]).map((type) => (
+              <Button
+                key={type}
+                title={type}
+                onPress={() => setServiceDraft({ ...serviceDraft, type })}
+                color={serviceDraft.type === type ? colors.accent : undefined}
+              />
+            ))}
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Start time</Text>
+            <TextInput
+              value={serviceDraft.startTime}
+              onChangeText={(value) => setServiceDraft({ ...serviceDraft, startTime: value })}
+              placeholder="HH:MM"
+              style={styles.input}
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>End time</Text>
+            <TextInput
+              value={serviceDraft.endTime}
+              onChangeText={(value) => setServiceDraft({ ...serviceDraft, endTime: value })}
+              placeholder="HH:MM"
+              style={styles.input}
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Days of week</Text>
+            {[1, 2, 3, 4, 5, 6].map((day) => (
+              <Button
+                key={day}
+                title={getDayName(day).substring(0, 3)}
+                onPress={() => {
+                  const updated = serviceDraft.daysOfWeek.includes(day)
+                    ? serviceDraft.daysOfWeek.filter((d) => d !== day)
+                    : [...serviceDraft.daysOfWeek, day];
+                  setServiceDraft({ ...serviceDraft, daysOfWeek: updated });
+                }}
+                color={serviceDraft.daysOfWeek.includes(day) ? colors.accent : undefined}
+              />
+            ))}
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Capacity (seats)</Text>
+            <TextInput
+              value={String(serviceDraft.capacity)}
+              onChangeText={(value) => setServiceDraft({ ...serviceDraft, capacity: Number(value) || 0 })}
+              placeholder="12"
+              style={styles.input}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Price per month (₹)</Text>
+            <TextInput
+              value={String(serviceDraft.pricePerMonth)}
+              onChangeText={(value) => setServiceDraft({ ...serviceDraft, pricePerMonth: Number(value) || 0 })}
+              placeholder="3000"
+              style={styles.input}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Estimated earnings</Text>
+            <Text style={styles.metric}>₹{serviceDraft.pricePerMonth}/month</Text>
+          </View>
+          <View style={styles.actions}>
+            <Button title={loading ? 'Creating...' : 'Create service'} onPress={createService} disabled={loading} />
+            <Button title="Back" onPress={() => setScreen('services')} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.stack}>
@@ -773,6 +1299,9 @@ export default function App() {
           <Text style={styles.titleDark}>{nextAction}</Text>
           <Text style={styles.bodyDark}>{status}</Text>
         </View>
+
+        <VerificationBadge verification={verification} />
+
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Current trip</Text>
           <Text style={styles.metric}>{trip ? `${trip.tripType} | ${trip.status}` : 'No active trip'}</Text>
@@ -815,8 +1344,11 @@ export default function App() {
           <Button title="Ping location now" onPress={() => pingLocation('Location ping sent for the active trip.')} />
           <Button title="End trip" onPress={endTrip} />
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
+          <Button title="Driver Verification" onPress={() => { loadVerification(); setScreen('verification'); }} color={colors.accent} />
+          <Button title="My Services" onPress={() => { loadServices(); setScreen('services'); }} color={colors.accent} />
           <Button title="Success Stories" onPress={() => setScreen('success-stories')} color={colors.accent} />
           <Button title="Leaderboard" onPress={() => setScreen('leaderboard')} color={colors.accent} />
+          <Button title="Route Analytics" onPress={() => setScreen('analytics')} color={colors.accent} />
           <Button title="Hiring System" onPress={() => { loadJobs(); setScreen('jobs'); }} />
           <Button title="Sign out" onPress={signOut} />
         </View>

@@ -336,6 +336,58 @@ export const JobApplySchema = z.object({
 });
 export type JobApplyInput = z.infer<typeof JobApplySchema>;
 
+// Multi-Service Routing Types
+export const ServiceTypeSchema = z.enum(['SCHOOL', 'TUITION', 'DANCE', 'SPORTS', 'OTHER']);
+export type ServiceType = z.infer<typeof ServiceTypeSchema>;
+
+export const ServiceStatusSchema = z.enum(['ACTIVE', 'ARCHIVED']);
+export type ServiceStatus = z.infer<typeof ServiceStatusSchema>;
+
+export const ServiceEnrollmentStatusSchema = z.enum(['ACTIVE', 'PAUSED', 'COMPLETED']);
+export type ServiceEnrollmentStatus = z.infer<typeof ServiceEnrollmentStatusSchema>;
+
+export type Service = {
+  id: string;
+  driverId: string;
+  name: string;
+  type: ServiceType;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  location: {
+    lat: number;
+    lng: number;
+  };
+  daysOfWeek: number[]; // 0=Sun, 1=Mon, etc
+  capacity: number;
+  pricePerMonth: number;
+  status: ServiceStatus;
+  createdAt: string;
+};
+
+export type ServiceEnrollment = {
+  id: string;
+  serviceId: string;
+  parentId: string;
+  childId: string;
+  status: ServiceEnrollmentStatus;
+  enrolledAt: string;
+};
+
+export const ServiceCreateSchema = z.object({
+  name: z.string().min(2),
+  type: ServiceTypeSchema,
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  location: z.object({
+    lat: z.number(),
+    lng: z.number(),
+  }),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
+  capacity: z.number().int().min(1),
+  pricePerMonth: z.number().min(0),
+});
+export type ServiceCreateInput = z.infer<typeof ServiceCreateSchema>;
+
 // Referral System Types
 export const PaymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED']);
 export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
@@ -378,8 +430,167 @@ export const PaymentRecordSchema = z.object({
 });
 export type PaymentRecordInput = z.infer<typeof PaymentRecordSchema>;
 
+// Emergency Alert Types
+export const EmergencyAlertStatusSchema = z.enum(['ACTIVE', 'RESOLVED', 'DISMISSED']);
+export type EmergencyAlertStatus = z.infer<typeof EmergencyAlertStatusSchema>;
+
+export type EmergencyAlert = {
+  id: string;
+  parentId: string;
+  childId: string;
+  timestamp: Date;
+  latitude: number;
+  longitude: number;
+  driverNotified: boolean;
+  driverRespondedAt?: Date;
+  status: EmergencyAlertStatus;
+  childName: string;
+};
+
+// Voice Calling Types
+export const CallStatusSchema = z.enum(['INITIATED', 'RINGING', 'CONNECTED', 'ENDED', 'FAILED']);
+export type CallStatus = z.infer<typeof CallStatusSchema>;
+
+export const CallDirectionSchema = z.enum(['PARENT_TO_DRIVER', 'DRIVER_TO_PARENT']);
+export type CallDirection = z.infer<typeof CallDirectionSchema>;
+
+export type CallRecord = {
+  id: string;
+  callerId: string;
+  receiverId: string;
+  direction: CallDirection;
+  startTime: string;
+  endTime?: string;
+  durationSeconds: number;
+  twillioCallSid: string;
+  status: CallStatus;
+};
+
 // Re-export WhatsApp extras
-export { sendWhatsAppAlert, getDemoLogs, clearDemoLogs, type WhatsAppAlertPayload } from './extras';
+export {
+  sendWhatsAppAlert,
+  getDemoLogs,
+  clearDemoLogs,
+  type WhatsAppAlertPayload,
+  sendEmergencyAlert,
+  getEmergencyAlerts,
+  clearEmergencyAlerts,
+  sendSubstituteNotification,
+  sendBackupBonusNotification,
+  sendRefundNotification,
+  getSubstituteNotifications,
+  clearSubstituteNotifications,
+  type SubstituteDriverNotificationPayload,
+  type BackupBonusNotificationPayload,
+  type RefundNotificationPayload,
+  initiateCall,
+  getCallRecords,
+  clearCallRecords,
+  type CallInitiateParams,
+} from './extras';
+
+// Driver Verification Types
+export const VerificationDocStatusSchema = z.enum(['APPROVED', 'REJECTED', 'PENDING']);
+export type VerificationDocStatus = z.infer<typeof VerificationDocStatusSchema>;
+
+export type DriverVerification = {
+  id: string;
+  driverId: string;
+  licensePhotoUrl?: string;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  insuranceDocUrl?: string;
+  policyNumber?: string;
+  insuranceExpiry?: string;
+  policeCheckDone: boolean;
+  status: 'NOT_STARTED' | 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  submittedAt?: string;
+};
+
+export const VerificationSubmitSchema = z.object({
+  licenseNumber: z.string().optional(),
+  licenseExpiry: z.string().optional(),
+  policyNumber: z.string().optional(),
+  insuranceExpiry: z.string().optional(),
+  policeCheckDone: z.boolean().default(false),
+});
+export type VerificationSubmitInput = z.infer<typeof VerificationSubmitSchema>;
+
+// Attendance & Invoice Types
+export const AttendanceStatusSchema = z.enum(['ATTENDED', 'ABSENT', 'EXCUSED']);
+export type AttendanceStatus = z.infer<typeof AttendanceStatusSchema>;
+
+export type AttendanceRecord = {
+  id: string;
+  childId: string;
+  parentId: string;
+  serviceId: string;
+  date: string; // ISO date
+  boardedTime?: string; // ISO timestamp
+  droppedTime?: string; // ISO timestamp
+  status: AttendanceStatus;
+  photoUrl?: string;
+  notes?: string;
+};
+
+export type Invoice = {
+  id: string;
+  parentId: string;
+  serviceId: string;
+  month: number; // 1-12
+  year: number;
+  attendanceDays: number;
+  pricePerDay: number;
+  totalAmount: number;
+  status: 'PENDING' | 'PAID' | 'OVERDUE';
+  issuedAt: string; // ISO timestamp
+  dueDate: string; // ISO date
+  paidAt?: string; // ISO timestamp
+};
+
+export type MonthlyAttendanceSummary = {
+  month: number;
+  year: number;
+  attendedDays: number;
+  absentDays: number;
+  excusedDays: number;
+  totalDays: number;
+  pricePerDay: number;
+  totalAmount: number;
+  invoice?: Invoice;
+};
+
+// Substitute Driver Assignment Types
+export const SubstituteReasonSchema = z.enum(['SICK', 'ACCIDENT', 'EMERGENCY', 'OTHER']);
+export type SubstituteReason = z.infer<typeof SubstituteReasonSchema>;
+
+export const SubstituteStatusSchema = z.enum(['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']);
+export type SubstituteStatus = z.infer<typeof SubstituteStatusSchema>;
+
+export type SubstituteAssignment = {
+  id: string;
+  originalDriverId: string;
+  backupDriverId: string;
+  serviceId: string; // The service/route identifier
+  date: Date;
+  reason: SubstituteReason;
+  backupFee: number; // ₹200 bonus for backup
+  status: SubstituteStatus;
+  parentNotifiedAt?: Date;
+  backupNotifiedAt?: Date;
+};
+
+export type DriverAvailability = {
+  id: string;
+  driverId: string;
+  date: Date;
+  available: boolean;
+  reason?: SubstituteReason;
+  routesCoveringCount: number;
+};
 
 // Re-export Success Stories and Leaderboard types
 export {
@@ -399,3 +610,49 @@ export {
   type LeaderboardEntry,
   type LeaderboardQueryParams,
 } from './success-stories';
+
+// Route Analytics Types
+export type RouteAnalytics = {
+  id: string;
+  driverId: string;
+  serviceId: string;
+  routeName: string;
+  month: number;
+  year: number;
+  families: number;
+  revenue: number;
+  fuelCost: number;
+  maintenanceCost: number;
+  netProfit: number;
+  occupancyRate: number;
+  averageRating: number;
+  growth: number;
+  capacitySeats: number;
+  bookedSeats: number;
+};
+
+export type CostBreakdown = {
+  id: string;
+  driverId: string;
+  month: number;
+  year: number;
+  fuelCost: number;
+  maintenanceCost: number;
+  insuranceCost?: number;
+  loanPayment?: number;
+  otherCosts: number;
+};
+
+export type RouteRecommendation = {
+  routeName: string;
+  recommendation: string;
+  action: 'SCALE' | 'OPTIMIZE' | 'DROP' | 'MAINTAIN';
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+};
+
+export type EarningsTrendData = {
+  month: string;
+  revenue: number;
+  expenses: number;
+  netProfit: number;
+};
