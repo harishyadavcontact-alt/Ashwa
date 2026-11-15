@@ -537,9 +537,9 @@ function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSigned
 
       <PushToggle />
 
-      {isDriver !== null && (
+      {isDriver && (
         <button type="button" className="btn ghost full" onClick={() => navigate('/driver')}>
-          {isDriver ? 'Switch to driver' : 'I also run a van'}
+          Switch to driver
         </button>
       )}
 
