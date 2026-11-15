@@ -1,17 +1,26 @@
 import { supabase } from '../lib/supabase';
+import { cheapestInsertIndex, makeReferralCode, orderedStops, phoneKey } from '../logic/routes';
+import { haversineMeters } from '../logic/eta';
 import type { EventType, TripType } from '../logic/tripProgression';
 import type { AppStore } from './store';
 import type {
   ChildRecord,
+  Direction,
   DriverProfile,
   EventRecord,
   ParentProfile,
+  PaymentRecord,
+  Point,
+  RouteRecord,
+  RouteSearchResult,
+  RouteStop,
   TripRecord,
   VanLocation,
 } from './types';
 
-// Pilot store: Supabase Postgres with row-level security. Requires the schema in supabase/migrations to be applied.
+// Pilot store: Supabase Postgres with row-level security. Needs supabase/migrations/0001_pilot_schema.sql applied.
 type Row = Record<string, unknown>;
+const SAME_STOP_METRES = 30;
 
 function client() {
   if (!supabase) throw new Error('Supabase is not configured');
@@ -23,40 +32,76 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data;
 }
 
-function mapChild(r: Row): ChildRecord {
-  return {
-    id: r.id as string,
-    parentId: r.parent_id as string,
-    driverId: r.driver_id as string,
-    firstName: r.first_name as string,
-    schoolName: r.school_name as string,
-    schoolLat: (r.school_lat as number | null) ?? null,
-    schoolLng: (r.school_lng as number | null) ?? null,
-    pickup: { lat: r.pickup_lat as number, lng: r.pickup_lng as number, label: (r.pickup_label as string) ?? '' },
-    drop: { lat: r.drop_lat as number, lng: r.drop_lng as number, label: (r.drop_label as string) ?? '' },
-    createdAt: r.created_at as string,
-  };
-}
+const mapDriver = (r: Row): DriverProfile => ({ id: r.id as string, name: r.name as string, vanSeats: r.van_seats as number });
 
-function mapTrip(r: Row): TripRecord {
-  return {
-    id: r.id as string,
-    driverId: r.driver_id as string,
-    tripType: r.trip_type as TripType,
-    startedAt: r.started_at as string,
-    endedAt: (r.ended_at as string | null) ?? null,
-  };
-}
+const mapParent = (r: Row): ParentProfile => ({
+  id: r.id as string,
+  name: (r.name as string) ?? '',
+  phone: r.phone as string,
+  referralCode: r.referral_code as string,
+  referredBy: (r.referred_by as string | null) ?? null,
+});
 
-function mapEvent(r: Row): EventRecord {
-  return {
-    id: r.id as string,
-    tripId: r.trip_id as string,
-    childId: r.child_id as string,
-    eventType: r.event_type as EventType,
-    createdAt: r.created_at as string,
-  };
-}
+const mapRoute = (r: Row): RouteRecord => ({
+  id: r.id as string,
+  ownerId: r.owner_id as string,
+  code: r.code as string,
+  name: r.name as string,
+  schoolName: r.school_name as string,
+  school: { lat: r.school_lat as number, lng: r.school_lng as number, label: r.school_name as string },
+  start: { lat: r.start_lat as number, lng: r.start_lng as number, label: (r.start_label as string) ?? 'Van base' },
+  vanSeats: r.van_seats as number,
+  createdAt: r.created_at as string,
+});
+
+const mapStop = (r: Row): RouteStop => ({
+  id: r.id as string,
+  routeId: r.route_id as string,
+  direction: r.direction as Direction,
+  order: r.stop_order as number,
+  point: { lat: r.lat as number, lng: r.lng as number, label: (r.label as string) ?? '' },
+});
+
+const mapChild = (r: Row): ChildRecord => ({
+  id: r.id as string,
+  routeId: r.route_id as string,
+  parentId: (r.parent_id as string | null) ?? null,
+  parentPhone: r.parent_phone as string,
+  firstName: r.first_name as string,
+  schoolName: r.school_name as string,
+  toSchoolStopId: r.to_school_stop_id as string,
+  toHomeStopId: r.to_home_stop_id as string,
+  monthlyFee: r.monthly_fee as number,
+  createdAt: r.created_at as string,
+});
+
+const mapTrip = (r: Row): TripRecord => ({
+  id: r.id as string,
+  routeId: r.route_id as string,
+  startedBy: r.started_by as string,
+  tripType: r.trip_type as TripType,
+  startedAt: r.started_at as string,
+  endedAt: (r.ended_at as string | null) ?? null,
+});
+
+const mapEvent = (r: Row): EventRecord => ({
+  id: r.id as string,
+  tripId: r.trip_id as string,
+  childId: r.child_id as string,
+  eventType: r.event_type as EventType,
+  createdAt: r.created_at as string,
+});
+
+const mapPayment = (r: Row): PaymentRecord => ({
+  id: r.id as string,
+  childId: r.child_id as string,
+  month: r.month as string,
+  amount: r.amount as number,
+  status: r.status as PaymentRecord['status'],
+  method: (r.method as string) ?? '',
+  reference: (r.reference as string) ?? '',
+  updatedAt: r.updated_at as string,
+});
 
 export class SupabaseStore implements AppStore {
   auth = {
@@ -73,6 +118,10 @@ export class SupabaseStore implements AppStore {
       const { data } = await client().auth.getUser();
       return data.user?.id ?? null;
     },
+    currentPhone: async (): Promise<string | null> => {
+      const { data } = await client().auth.getUser();
+      return data.user?.phone ?? null;
+    },
     signOut: async (): Promise<void> => {
       await client().auth.signOut();
     },
@@ -80,37 +129,181 @@ export class SupabaseStore implements AppStore {
 
   async getDriver(id: string) {
     const r = check(await client().from('drivers').select('*').eq('id', id).maybeSingle());
-    return r
-      ? {
-          id: r.id as string,
-          name: r.name as string,
-          vanSeats: r.van_seats as number,
-          baseLat: (r.base_lat as number | null) ?? null,
-          baseLng: (r.base_lng as number | null) ?? null,
-        }
-      : null;
+    return r ? mapDriver(r as Row) : null;
   }
 
   async saveDriver(d: DriverProfile) {
-    check(
-      await client()
-        .from('drivers')
-        .upsert({ id: d.id, name: d.name, van_seats: d.vanSeats, base_lat: d.baseLat, base_lng: d.baseLng }),
-    );
+    check(await client().from('drivers').upsert({ id: d.id, name: d.name, van_seats: d.vanSeats }));
   }
 
   async getParent(id: string) {
     const r = check(await client().from('parents').select('*').eq('id', id).maybeSingle());
-    return r ? { id: r.id as string, name: (r.name as string) ?? '', phone: r.phone as string } : null;
+    return r ? mapParent(r as Row) : null;
   }
 
-  async saveParent(p: ParentProfile) {
-    check(await client().from('parents').upsert({ id: p.id, name: p.name, phone: p.phone }));
+  async saveParent(input: Omit<ParentProfile, 'referralCode'> & { referralCode?: string }) {
+    const row = {
+      id: input.id,
+      name: input.name,
+      phone: input.phone,
+      referral_code: input.referralCode ?? makeReferralCode(),
+      referred_by: input.referredBy,
+    };
+    // Keep the referral code and referrer once set.
+    const existing = await this.getParent(input.id);
+    const payload = existing
+      ? { id: input.id, name: input.name, phone: input.phone }
+      : row;
+    const saved = check(
+      await client().from('parents').upsert(payload).select('*').single(),
+    );
+    return mapParent(saved as Row);
   }
 
-  async listChildrenForDriver(driverId: string) {
-    const rows = check(await client().from('children').select('*').eq('driver_id', driverId));
+  async getDriverName(id: string) {
+    const d = await this.getDriver(id);
+    return d?.name ?? 'Driver';
+  }
+
+  async routeDriverName(routeId: string) {
+    return (check(await client().rpc('route_driver_name', { p_route_id: routeId })) as string) || 'Driver';
+  }
+
+  async createRoute(input: Omit<RouteRecord, 'id' | 'code' | 'createdAt'>) {
+    const code = makeCode();
+    const row = check(
+      await client()
+        .from('routes')
+        .insert({
+          owner_id: input.ownerId,
+          code,
+          name: input.name,
+          school_name: input.schoolName,
+          school_lat: input.school.lat,
+          school_lng: input.school.lng,
+          start_lat: input.start.lat,
+          start_lng: input.start.lng,
+          start_label: input.start.label,
+          van_seats: input.vanSeats,
+        })
+        .select('*')
+        .single(),
+    );
+    return mapRoute(row as Row);
+  }
+
+  async listRoutesForDriver(_driverId: string) {
+    // RLS returns routes the user owns or has joined.
+    const rows = check(await client().from('routes').select('*').order('created_at'));
+    return (rows as Row[]).map(mapRoute);
+  }
+
+  async getRoute(routeId: string) {
+    const r = check(await client().from('routes').select('*').eq('id', routeId).maybeSingle());
+    return r ? mapRoute(r as Row) : null;
+  }
+
+  async joinRouteByCode(code: string) {
+    const rid = check(await client().rpc('join_route', { p_code: code }));
+    const route = await this.getRoute(rid as string);
+    if (!route) throw new Error('Route not found');
+    return route;
+  }
+
+  async listStops(routeId: string) {
+    const rows = check(await client().from('route_stops').select('*').eq('route_id', routeId));
+    return (rows as Row[]).map(mapStop);
+  }
+
+  // Inserts a stop at the cheapest position in its direction, then renumbers the direction.
+  private async insertStop(route: RouteRecord, direction: Direction, point: Point): Promise<RouteStop> {
+    const all = await this.listStops(route.id);
+    const ordered = orderedStops(all, direction);
+    const endpoints = direction === 'TO_SCHOOL' ? [route.start, route.school] : [route.school, route.start];
+    const at = cheapestInsertIndex(ordered.map((s) => s.point), endpoints[0], endpoints[1], point);
+    const created = check(
+      await client()
+        .from('route_stops')
+        .insert({ route_id: route.id, direction, stop_order: at, lat: point.lat, lng: point.lng, label: point.label })
+        .select('*')
+        .single(),
+    );
+    // Shift the later stops down by one so the orders stay unique.
+    const later = ordered.slice(at);
+    for (const s of later) {
+      check(await client().from('route_stops').update({ stop_order: s.order + 1 }).eq('id', s.id));
+    }
+    return mapStop(created as Row);
+  }
+
+  private async ensureStop(route: RouteRecord, direction: Direction, point: Point): Promise<RouteStop> {
+    const near = (await this.listStops(route.id)).find(
+      (s) => s.direction === direction && haversineMeters(s.point, point) <= SAME_STOP_METRES,
+    );
+    return near ?? this.insertStop(route, direction, point);
+  }
+
+  async addStop(routeId: string, direction: Direction, point: Point) {
+    const route = await this.getRoute(routeId);
+    if (!route) throw new Error('Route not found');
+    return this.insertStop(route, direction, point);
+  }
+
+  async moveStop(stopId: string, delta: -1 | 1) {
+    const stop = check(await client().from('route_stops').select('*').eq('id', stopId).single());
+    const mine = mapStop(stop as Row);
+    const list = orderedStops(await this.listStops(mine.routeId), mine.direction);
+    const i = list.findIndex((s) => s.id === stopId);
+    const j = i + delta;
+    if (j < 0 || j >= list.length) return;
+    const other = list[j];
+    // Swap orders through a temporary value to respect the unique (route, direction, order) constraint.
+    check(await client().from('route_stops').update({ stop_order: -1 }).eq('id', mine.id));
+    check(await client().from('route_stops').update({ stop_order: mine.order }).eq('id', other.id));
+    check(await client().from('route_stops').update({ stop_order: other.order }).eq('id', mine.id));
+  }
+
+  async removeStop(stopId: string) {
+    check(await client().from('route_stops').delete().eq('id', stopId));
+  }
+
+  async listChildrenForRoute(routeId: string) {
+    const rows = check(await client().from('children').select('*').eq('route_id', routeId).order('created_at'));
     return (rows as Row[]).map(mapChild);
+  }
+
+  async addCustomer(input: {
+    routeId: string;
+    firstName: string;
+    parentPhone: string;
+    monthlyFee: number;
+    pickup: Point;
+    drop: Point | null;
+  }) {
+    const route = await this.getRoute(input.routeId);
+    if (!route) throw new Error('Route not found');
+    const toSchool = await this.ensureStop(route, 'TO_SCHOOL', input.pickup);
+    const toHome = await this.ensureStop(route, 'TO_HOME', input.drop ?? input.pickup);
+    const row = check(
+      await client()
+        .from('children')
+        .insert({
+          route_id: route.id,
+          parent_phone: phoneKey(input.parentPhone),
+          first_name: input.firstName.trim(),
+          school_name: route.schoolName,
+          to_school_stop_id: toSchool.id,
+          to_home_stop_id: toHome.id,
+          monthly_fee: input.monthlyFee,
+        })
+        .select('*')
+        .single(),
+    );
+    return mapChild(row as Row);
+  }
+
+  async setMonthlyFee(childId: string, fee: number) {
+    check(await client().from('children').update({ monthly_fee: fee }).eq('id', childId));
   }
 
   async listChildrenForParent(parentId: string) {
@@ -118,44 +311,64 @@ export class SupabaseStore implements AppStore {
     return (rows as Row[]).map(mapChild);
   }
 
-  async addChild(c: ChildRecord) {
-    check(
-      await client().from('children').insert({
-        id: c.id,
-        parent_id: c.parentId,
-        driver_id: c.driverId,
-        first_name: c.firstName,
-        school_name: c.schoolName,
-        school_lat: c.schoolLat,
-        school_lng: c.schoolLng,
-        pickup_lat: c.pickup.lat,
-        pickup_lng: c.pickup.lng,
-        pickup_label: c.pickup.label,
-        drop_lat: c.drop.lat,
-        drop_lng: c.drop.lng,
-        drop_label: c.drop.label,
-      }),
-    );
+  async claimChildrenForPhone(_parentId: string, _phone: string) {
+    return check(await client().rpc('claim_children')) as number;
   }
 
-  async startTrip(driverId: string, tripType: TripType, tripId: string) {
-    const now = new Date().toISOString();
+  async searchRoutes(schoolName: string, point: Point): Promise<RouteSearchResult[]> {
+    const rows = check(
+      await client().rpc('search_routes', { p_school: schoolName, p_lat: point.lat, p_lng: point.lng }),
+    ) as Row[];
+    return rows.map((r) => ({
+      routeId: r.route_id as string,
+      routeName: r.route_name as string,
+      schoolName: r.school_name as string,
+      driverName: r.driver_name as string,
+      seatsLeft: r.seats_left as number,
+      distanceM: r.distance_m as number,
+    }));
+  }
+
+  async knownSchools() {
+    const rows = check(await client().from('routes').select('school_name'));
+    return [...new Set((rows as Row[]).map((r) => r.school_name as string))].sort();
+  }
+
+  async enrolChild(input: { routeId: string; parentId: string; parentPhone: string; firstName: string; pickup: Point }) {
+    const id = check(
+      await client().rpc('enrol_child', {
+        p_route_id: input.routeId,
+        p_first_name: input.firstName,
+        p_lat: input.pickup.lat,
+        p_lng: input.pickup.lng,
+        p_label: input.pickup.label,
+      }),
+    ) as string;
+    const row = check(await client().from('children').select('*').eq('id', id).single());
+    return mapChild(row as Row);
+  }
+
+  async startTrip(routeId: string, startedBy: string, tripType: TripType, tripId: string) {
     check(
-      await client().from('trips').update({ ended_at: now }).eq('driver_id', driverId).is('ended_at', null),
+      await client()
+        .from('trips')
+        .update({ ended_at: new Date().toISOString() })
+        .eq('route_id', routeId)
+        .is('ended_at', null),
     );
     const row = check(
       await client()
         .from('trips')
-        .insert({ id: tripId, driver_id: driverId, trip_type: tripType, started_at: now })
-        .select()
+        .insert({ id: tripId, route_id: routeId, started_by: startedBy, trip_type: tripType })
+        .select('*')
         .single(),
     );
     return mapTrip(row as Row);
   }
 
-  async getActiveTrip(driverId: string) {
+  async getActiveTrip(routeId: string) {
     const row = check(
-      await client().from('trips').select('*').eq('driver_id', driverId).is('ended_at', null).maybeSingle(),
+      await client().from('trips').select('*').eq('route_id', routeId).is('ended_at', null).maybeSingle(),
     );
     return row ? mapTrip(row as Row) : null;
   }
@@ -165,14 +378,15 @@ export class SupabaseStore implements AppStore {
   }
 
   async addEvent(e: Omit<EventRecord, 'createdAt'>) {
-    // Unique (trip, child, event) in the schema makes a repeat tap a no-op.
-    const res = await client()
-      .from('trip_events')
-      .upsert(
-        { id: e.id, trip_id: e.tripId, child_id: e.childId, event_type: e.eventType },
-        { onConflict: 'trip_id,child_id,event_type', ignoreDuplicates: true },
-      );
-    check(res);
+    // The unique (trip, child, event) constraint makes a repeat tap a no-op.
+    check(
+      await client()
+        .from('trip_events')
+        .upsert(
+          { id: e.id, trip_id: e.tripId, child_id: e.childId, event_type: e.eventType },
+          { onConflict: 'trip_id,child_id,event_type', ignoreDuplicates: true },
+        ),
+    );
   }
 
   async listEvents(tripId: string) {
@@ -198,4 +412,48 @@ export class SupabaseStore implements AppStore {
       updatedAt: r.updated_at as string,
     };
   }
+
+  async listPayments(childIds: string[], month: string) {
+    if (childIds.length === 0) return [];
+    const rows = check(await client().from('payments').select('*').in('child_id', childIds).eq('month', month));
+    return (rows as Row[]).map(mapPayment);
+  }
+
+  private async upsertPayment(
+    input: { childId: string; month: string; amount: number; method: string; reference: string },
+    status: PaymentRecord['status'],
+  ) {
+    check(
+      await client()
+        .from('payments')
+        .upsert(
+          {
+            child_id: input.childId,
+            month: input.month,
+            amount: input.amount,
+            status,
+            method: input.method,
+            reference: input.reference,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'child_id,month' },
+        ),
+    );
+  }
+
+  async reportPayment(input: { childId: string; month: string; amount: number; method: string; reference: string }) {
+    await this.upsertPayment(input, 'REPORTED');
+  }
+
+  async markPaid(input: { childId: string; month: string; amount: number; method: string; reference: string }) {
+    await this.upsertPayment(input, 'PAID');
+  }
+
+  async clearPayment(childId: string, month: string) {
+    check(await client().from('payments').delete().eq('child_id', childId).eq('month', month));
+  }
+}
+
+function makeCode(): string {
+  return makeReferralCode();
 }
