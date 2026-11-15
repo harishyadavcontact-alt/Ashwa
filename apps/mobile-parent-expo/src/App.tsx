@@ -101,6 +101,11 @@ export default function App() {
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [enrolledServices, setEnrolledServices] = useState<ServiceEnrollment[]>([]);
 
+  // Shared Rides state
+  const [sharedRideOptions, setSharedRideOptions] = useState<any>(null);
+  const [selectedRideOption, setSelectedRideOption] = useState<'ALONE' | 'SHARED_2' | 'SHARED_3PLUS'>('ALONE');
+  const [enrollmentInProgress, setEnrollmentInProgress] = useState(false);
+
   const assignment = assignmentState?.primary || null;
   const trip = tripState?.trip || null;
   const primaryChild = children[0] || null;
@@ -175,6 +180,32 @@ export default function App() {
         ];
         await AsyncStorage.setItem('ashwa.services', JSON.stringify(demoServices));
         setAvailableServices(demoServices);
+
+        // Initialize demo shared rides data
+        const demoSharedRides = {
+          'demo-1': {
+            alone: { type: 'ALONE', price: 200, savings: 0, capacity: 1 },
+            shared2: {
+              option: { type: 'SHARED_2', price: 150, savings: 50, capacity: 2 },
+              families: ['Sharma Family', 'Patel Family']
+            },
+            shared3Plus: {
+              option: { type: 'SHARED_3PLUS', price: 120, savings: 80, capacity: 4 },
+              families: ['Iyer Family', 'Reddy Family', 'Gupta Family']
+            }
+          },
+          'demo-2': {
+            alone: { type: 'ALONE', price: 200, savings: 0, capacity: 1 },
+            shared2: {
+              option: { type: 'SHARED_2', price: 150, savings: 50, capacity: 2 },
+              families: ['Kumar Family']
+            }
+          },
+          'demo-3': {
+            alone: { type: 'ALONE', price: 200, savings: 0, capacity: 1 }
+          }
+        };
+        await AsyncStorage.setItem('ashwa.shared_rides', JSON.stringify(demoSharedRides));
       } else {
         setAvailableServices(JSON.parse(stored));
       }
