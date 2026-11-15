@@ -15,6 +15,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Animated,
 } from 'react-native';
 import { api } from './api';
 import { AdminVerificationDashboard } from './AdminVerification';
@@ -25,6 +26,7 @@ import { VerificationBadge } from './VerificationBadge';
 import { VerificationForm } from './VerificationForm';
 import { OptimizedTripScreen } from './OptimizedTripScreen';
 import { OwnerDashboard } from './OwnerDashboard';
+import { InfoTip } from './InfoTip';
 import { MoreMenu } from './MoreMenu';
 import { SettingsScreen } from './SettingsScreen';
 import { EarningsBreakdownScreen } from './EarningsBreakdownScreen';
@@ -150,6 +152,13 @@ export default function App() {
   const [activeCall, setActiveCall] = useState<CallRecordData | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [callModalVisible, setCallModalVisible] = useState(false);
+
+  // Demo and Info Tip state
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoStartTime, setDemoStartTime] = useState<number | null>(null);
+  const [demoEarnings, setDemoEarnings] = useState(0);
+  const [showInfoTip, setShowInfoTip] = useState(false);
+  const [demoHasRun, setDemoHasRun] = useState(false);
 
   const incoming = incomingState?.items || [];
   const accepted = assignmentState?.items || [];
@@ -437,6 +446,45 @@ export default function App() {
     const interval = setInterval(checkActiveCall, 500);
     return () => clearInterval(interval);
   }, [activeCall]);
+
+  // Demo run animation (2-hour route in 2 minutes real-time)
+  useEffect(() => {
+    if (!demoMode || !demoStartTime) return;
+
+    const demoInterval = setInterval(() => {
+      const elapsed = (Date.now() - demoStartTime) / 1000; // seconds
+      const progress = Math.min(elapsed / 120, 1); // 2-minute demo (120 seconds)
+
+      if (progress < 1) {
+        // Animate earnings over the 2-minute period
+        const baseEarnings = [100, 250, 200, 200]; // Earnings at each stop
+        let currentEarnings = 0;
+
+        if (progress < 0.25) {
+          // 0-30s: Pickup #1
+          currentEarnings = Math.floor(100 * (progress / 0.25));
+        } else if (progress < 0.5) {
+          // 30-60s: School arrival
+          currentEarnings = 100 + Math.floor(250 * ((progress - 0.25) / 0.25));
+        } else if (progress < 0.75) {
+          // 60-90s: Pickup from school
+          currentEarnings = 350 + Math.floor(200 * ((progress - 0.5) / 0.25));
+        } else {
+          // 90-120s: Home delivery
+          currentEarnings = 550 + Math.floor(200 * ((progress - 0.75) / 0.25));
+        }
+
+        setDemoEarnings(currentEarnings);
+      } else {
+        // Demo complete
+        setDemoMode(false);
+        setDemoHasRun(true);
+        setDemoEarnings(750);
+      }
+    }, 500);
+
+    return () => clearInterval(demoInterval);
+  }, [demoMode, demoStartTime]);
 
   async function bootstrapLocationMode() {
     try {
@@ -1849,11 +1897,26 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.page}>
+      {/* Info Tip */}
+      <InfoTip
+        tip="Tap [▶ START TRIP] when ready"
+        visible={showInfoTip}
+      />
+
       <ScrollView contentContainerStyle={styles.stack}>
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>Next action</Text>
-          <Text style={styles.titleDark}>{nextAction}</Text>
-          <Text style={styles.bodyDark}>{status}</Text>
+        <View style={[styles.heroCard, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.kicker}>Next action</Text>
+            <Text style={styles.titleDark}>{demoMode ? `DEMO: ₹${demoEarnings} earned` : nextAction}</Text>
+            <Text style={styles.bodyDark}>{demoMode ? 'Demo route animation' : status}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowInfoTip(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.infoButtonText}>ⓘ</Text>
+          </TouchableOpacity>
         </View>
 
         <VerificationBadge verification={verification} />
@@ -1913,6 +1976,20 @@ export default function App() {
           )}
         </View>
         <View style={styles.actions}>
+          {!demoHasRun && (
+            <Button
+              title={demoMode ? 'DEMO RUNNING...' : 'DEMO RUN'}
+              onPress={() => {
+                if (!demoMode) {
+                  setDemoMode(true);
+                  setDemoStartTime(Date.now());
+                  setDemoEarnings(0);
+                }
+              }}
+              disabled={demoMode}
+              color="#3b82f6"
+            />
+          )}
           <Button title="Refresh" onPress={refresh} />
           <Button title="Start morning trip" onPress={() => startTrip('MORNING')} />
           <Button title="Start afternoon trip" onPress={() => startTrip('AFTERNOON')} />
@@ -2118,6 +2195,19 @@ const styles = StyleSheet.create({
   },
   closeCallButtonText: {
     color: colors.panel,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  infoButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  infoButtonText: {
+    color: colors.ink,
     fontSize: 14,
     fontWeight: '700',
   },

@@ -9,8 +9,10 @@ import {
   Button,
   TouchableOpacity,
   Modal,
+  Animated,
 } from 'react-native';
 import { colors } from './theme';
+import { InfoTip } from './InfoTip';
 import { RouteOverviewCard } from './RouteOverviewCard';
 import { EarningsCard } from './EarningsCard';
 import { TeamCard } from './TeamCard';
@@ -37,6 +39,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
+  const [demoMode, setDemoMode] = useState(false);
+  const [showInfoTip, setShowInfoTip] = useState(false);
+  const [demoHasRun, setDemoHasRun] = useState(false);
 
   // Demo routes for job posting
   const [routes] = useState<Route[]>([
@@ -47,14 +52,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
   ]);
 
   // Demo data
-  const [routeOverview] = useState({
+  const [routeOverview, setRouteOverview] = useState({
     activeRoutes: 5,
     familiesServed: 150,
     monthlyRevenue: 150000,
     status: 'healthy' as const,
   });
 
-  const [earnings] = useState({
+  const [earnings, setEarnings] = useState({
     totalToday: 1850,
     breakdown: [
       { routeName: 'School A', amount: 650 },
@@ -65,7 +70,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
     trendDirection: 'up' as const,
   });
 
-  const [team] = useState({
+  const [team, setTeam] = useState({
     members: [
       { name: 'Rajesh', monthlyPay: 12000, earnedToday: 650, paymentDate: 15 },
       { name: 'Priya', monthlyPay: 10000, earnedToday: 480, paymentDate: 15 },
@@ -74,7 +79,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
     nextPayoutDays: 4,
   });
 
-  const [loan] = useState({
+  const [loan, setLoan] = useState({
     principal: 500000,
     monthlyPayment: 8333,
     amountPaid: 75000,
@@ -85,7 +90,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
     autoDeductEnabled: true,
   });
 
-  const [profitability] = useState({
+  const [profitability, setProfitability] = useState({
     routes: [
       {
         name: 'School A',
@@ -155,6 +160,112 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
     }
   };
 
+  const toggleDemoMode = () => {
+    if (!demoMode) {
+      // Load demo data
+      setRouteOverview({
+        activeRoutes: 5,
+        familiesServed: 150,
+        monthlyRevenue: 150000,
+        status: 'healthy' as const,
+      });
+      setEarnings({
+        totalToday: 1850,
+        breakdown: [
+          { routeName: 'School A', amount: 650 },
+          { routeName: 'School B', amount: 580 },
+          { routeName: 'Tuition C', amount: 620 },
+        ],
+        trend: 200,
+        trendDirection: 'up' as const,
+      });
+      setTeam({
+        members: [
+          { name: 'Rajesh', monthlyPay: 12000, earnedToday: 650, paymentDate: 15 },
+          { name: 'Priya', monthlyPay: 10000, earnedToday: 480, paymentDate: 15 },
+        ],
+        totalPayroll: 22000,
+        nextPayoutDays: 4,
+      });
+      setLoan({
+        principal: 500000,
+        monthlyPayment: 8333,
+        amountPaid: 75000,
+        totalPayment: 300000,
+        monthsRemaining: 28,
+        nextPaymentDate: 15,
+        progressPercent: 25,
+        autoDeductEnabled: true,
+      });
+      setProfitability({
+        routes: [
+          {
+            name: 'School A',
+            profit: 1800,
+            occupancy: 62.5,
+            trend: 200,
+            trendDirection: 'up' as const,
+            recommendation: 'scale' as const,
+          },
+          {
+            name: 'School B',
+            profit: 200,
+            occupancy: 25,
+            trend: -100,
+            trendDirection: 'down' as const,
+            recommendation: 'drop' as const,
+          },
+          {
+            name: 'Tuition C',
+            profit: 1400,
+            occupancy: 90,
+            trend: 500,
+            trendDirection: 'up' as const,
+            recommendation: 'scale' as const,
+          },
+        ],
+      });
+      setDemoMode(true);
+      setDemoHasRun(true);
+      setStatus('Demo fleet loaded: 5 routes, 150 families, ₹150k/month');
+    }
+  };
+
+  const resetToBlank = () => {
+    setDemoMode(false);
+    setRouteOverview({
+      activeRoutes: 0,
+      familiesServed: 0,
+      monthlyRevenue: 0,
+      status: 'healthy' as const,
+    });
+    setEarnings({
+      totalToday: 0,
+      breakdown: [],
+      trend: 0,
+      trendDirection: 'up' as const,
+    });
+    setTeam({
+      members: [],
+      totalPayroll: 0,
+      nextPayoutDays: 0,
+    });
+    setLoan({
+      principal: 500000,
+      monthlyPayment: 8333,
+      amountPaid: 0,
+      totalPayment: 300000,
+      monthsRemaining: 60,
+      nextPaymentDate: 15,
+      progressPercent: 0,
+      autoDeductEnabled: false,
+    });
+    setProfitability({
+      routes: [],
+    });
+    setStatus('Demo reset. Ready to start your real operations.');
+  };
+
   if (screen === 'post-job') {
     return (
       <SafeAreaView style={styles.page}>
@@ -170,16 +281,31 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
 
   return (
     <SafeAreaView style={styles.page}>
+      {/* Info Tip */}
+      <InfoTip
+        tip="Tap [+ POST JOB] to hire your first driver"
+        visible={showInfoTip}
+      />
+
       <ScrollView contentContainerStyle={styles.stack}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.titleDark}>Owner Dashboard</Text>
-          <Text style={styles.bodyDark}>
-            Everything at a glance. Analytics first, actions always available.
-          </Text>
-          {status && (
-            <Text style={styles.status}>{status}</Text>
-          )}
+        <View style={[styles.header, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.titleDark}>{demoMode ? '📊 Demo Fleet' : 'Owner Dashboard'}</Text>
+            <Text style={styles.bodyDark}>
+              {demoMode ? 'Explore fleet operations with demo data' : 'Everything at a glance. Analytics first, actions always available.'}
+            </Text>
+            {status && (
+              <Text style={styles.status}>{status}</Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowInfoTip(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.infoButtonText}>ⓘ</Text>
+          </TouchableOpacity>
         </View>
 
         {loading && <ActivityIndicator color={colors.accent} />}
@@ -201,6 +327,25 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ token, onNavigat
 
         {/* Card 6: Attendance & Trust */}
         <AttendanceCard data={attendance} />
+
+        {/* Demo Controls */}
+        {!demoHasRun && (
+          <TouchableOpacity
+            style={styles.demoFleetButton}
+            onPress={toggleDemoMode}
+          >
+            <Text style={styles.demoFleetButtonText}>DEMO FLEET</Text>
+          </TouchableOpacity>
+        )}
+
+        {demoMode && (
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={resetToBlank}
+          >
+            <Text style={styles.resetButtonText}>RESET TO BLANK</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Bottom Action Bar */}
         <View style={styles.actionBar}>
@@ -291,5 +436,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  infoButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  infoButtonText: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  demoFleetButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  demoFleetButtonText: {
+    color: colors.panel,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  resetButton: {
+    backgroundColor: '#f97316',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginHorizontal: 20,
+  },
+  resetButtonText: {
+    color: colors.panel,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
