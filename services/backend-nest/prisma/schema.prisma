@@ -73,8 +73,13 @@ model User {
 model ParentProfile {
   userId String @id
   name String
+  referralCode String? @unique
   user User @relation(fields:[userId], references:[id])
   children Child[]
+  referrerReferrals ParentReferral[] @relation("ReferrerReferrals")
+  referredReferrals ParentReferral[] @relation("ReferredReferrals")
+  earningsAsReferrer ParentReferralEarnings[] @relation("EarningsAsReferrer")
+  earningsAsReferred ParentReferralEarnings[] @relation("EarningsAsReferred")
 }
 model DriverProfile {
   userId String @id
@@ -127,11 +132,13 @@ model Child {
   dropLat Float
   dropLng Float
   emergencyPhone String
+  referralCode String?
   parent ParentProfile @relation(fields:[parentId], references:[userId])
   institution Institution @relation(fields:[institutionId], references:[id])
   assignments Assignment[]
   tripStops TripStop[]
   events TripEvent[]
+  paymentRecords PaymentRecord[]
 }
 model DriverInstitution {
   driverId String
@@ -212,4 +219,49 @@ model DeviceToken {
   createdAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
   user User @relation(fields:[userId], references:[id])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model ParentReferral {
+  id String @id @default(cuid())
+  referrerParentId String
+  referredParentId String
+  referralCode String @unique
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now())
+  referrerParent ParentProfile @relation("ReferrerReferrals", fields:[referrerParentId], references:[userId])
+  referredParent ParentProfile @relation("ReferredReferrals", fields:[referredParentId], references:[userId])
+}
+
+model PaymentRecord {
+  id String @id @default(cuid())
+  childId String
+  month Int
+  year Int
+  amount Int @default(0)
+  status PaymentStatus @default(PENDING)
+  paidAt DateTime?
+  createdAt DateTime @default(now())
+  child Child @relation(fields:[childId], references:[id])
+  @@unique([childId, month, year])
+}
+
+model ParentReferralEarnings {
+  id String @id @default(cuid())
+  parentId String
+  referredParentId String
+  referralId String
+  amount Int @default(200)
+  month Int
+  year Int
+  status String @default("CREDITED")
+  createdAt DateTime @default(now())
+  parent ParentProfile @relation("EarningsAsReferrer", fields:[parentId], references:[userId])
+  referredParent ParentProfile @relation("EarningsAsReferred", fields:[referredParentId], references:[userId])
+  @@unique([referralId, month, year])
 }

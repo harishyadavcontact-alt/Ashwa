@@ -15,9 +15,11 @@ import {
   View,
 } from 'react-native';
 import { api } from './api';
+import { LeaderboardScreen } from './LeaderboardScreen';
+import { SuccessStoriesScreen } from './SuccessStoriesScreen';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -742,6 +744,27 @@ export default function App() {
     );
   }
 
+  // Success Stories Screen
+  if (screen === 'success-stories') {
+    return (
+      <SuccessStoriesScreen
+        token={token}
+        onNavigate={(nextScreen) => setScreen(nextScreen as Screen)}
+      />
+    );
+  }
+
+  // Leaderboard Screen
+  if (screen === 'leaderboard') {
+    return (
+      <LeaderboardScreen
+        driverId={driverSummary?.id}
+        token={token}
+        onNavigate={(nextScreen) => setScreen(nextScreen as Screen)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.stack}>
@@ -792,6 +815,8 @@ export default function App() {
           <Button title="Ping location now" onPress={() => pingLocation('Location ping sent for the active trip.')} />
           <Button title="End trip" onPress={endTrip} />
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
+          <Button title="Success Stories" onPress={() => setScreen('success-stories')} color={colors.accent} />
+          <Button title="Leaderboard" onPress={() => setScreen('leaderboard')} color={colors.accent} />
           <Button title="Hiring System" onPress={() => { loadJobs(); setScreen('jobs'); }} />
           <Button title="Sign out" onPress={signOut} />
         </View>

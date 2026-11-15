@@ -9,6 +9,7 @@ import { TripsModule } from './trips/trips.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { EventsModule } from './events/events.module';
 import { AdminModule } from './admin/admin.module';
+import { ReferralsModule } from './referrals/referrals.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 
@@ -25,6 +26,7 @@ import { HealthController } from './health.controller';
     TrackingModule,
     EventsModule,
     AdminModule,
+    ReferralsModule,
   ],
   controllers: [HealthController],
 })

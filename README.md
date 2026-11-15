@@ -7,6 +7,7 @@ Ashwa is a school-transport MVP with parent trust signals, deterministic trip ev
 1. `Ashwa_genesis.md`
 2. `README.md`
 3. `docs/`
+4. `strategy/` (business thesis, offers, bets; start with `strategy/README.md`)
 
 `Ashwa_genesis.md` is the local source of truth for agents and repo-level doctrine.
 Use this `README.md` as the root map for setup, runtime, and navigation.

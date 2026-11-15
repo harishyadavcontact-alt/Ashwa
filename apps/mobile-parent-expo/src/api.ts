@@ -4,6 +4,7 @@ import type {
   CurrentTripState,
   DriverServiceSummary,
   TimelineEventSummary,
+  ParentReferralStats,
 } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
@@ -55,4 +56,18 @@ export const api = {
     request<{ tripId: string; timeline: TimelineEventSummary[] }>(`/trips/${tripId}/timeline`, { token }),
   saveDeviceToken: (token: string, deviceToken: string, platform: string) =>
     request('/auth/device-token', { method: 'POST', token, body: { token: deviceToken, platform } }),
+
+  // Referral system
+  getReferralCode: (token: string) =>
+    request<{ referralCode: string }>('/referrals/code', { token }),
+  registerWithReferral: (token: string, referralCode: string) =>
+    request('/referrals/register', { method: 'POST', token, body: { referralCode } }),
+  linkChildToReferral: (childId: string, referralCode: string) =>
+    request('/referrals/link-child', { method: 'POST', body: { childId, referralCode } }),
+  recordPayment: (token: string, childId: string, month: number, year: number, amount: number, status: 'PENDING' | 'PAID' | 'FAILED') =>
+    request('/referrals/record-payment', { method: 'POST', token, body: { childId, month, year, amount, status } }),
+  getReferralStats: (token: string) =>
+    request<ParentReferralStats>('/referrals/stats', { token }),
+  getMyReferralEarnings: (token: string) =>
+    request<{ totalEarnings: number }>('/referrals/earnings', { token }),
 };

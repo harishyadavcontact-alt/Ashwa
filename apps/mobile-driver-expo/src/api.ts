@@ -1,4 +1,4 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType, Job, JobApplication, TeamMember, PayrollRecord, SuccessStory, LeaderboardEntry, LeaderboardQueryParams } from '@ashwa/shared';
 import { API_BASE_URL } from './config';
 
 type RequestOptions = {
@@ -45,4 +45,35 @@ export const api = {
     request('/tracking/ping', { method: 'POST', token, body: { tripId, lat, lng } }),
   emitEvent: (token: string, tripId: string, childId: string, eventType: EventType) =>
     request(`/trips/${tripId}/event`, { method: 'POST', token, body: { childId, eventType } }),
+
+  // Hiring system endpoints
+  postJob: (token: string, routeId: string, payPerMonth: number) =>
+    request<Job>('/jobs/post', { method: 'POST', token, body: { routeId, payPerMonth } }),
+  listAvailableJobs: (token: string) =>
+    request<Job[]>('/jobs/available', { token }),
+  applyForJob: (token: string, jobId: string) =>
+    request<JobApplication>('/jobs/apply', { method: 'POST', token, body: { jobId } }),
+  getMyTeam: (token: string) =>
+    request<TeamMember[]>('/hiring/team', { token }),
+  getPayrollHistory: (token: string) =>
+    request<PayrollRecord[]>('/hiring/payroll', { token }),
+  hireDriver: (token: string, jobId: string, driverId: string) =>
+    request<Job>(`/jobs/${jobId}/hire`, { method: 'POST', token, body: { driverId } }),
+  getJobApplications: (token: string, jobId: string) =>
+    request<JobApplication[]>(`/jobs/${jobId}/applications`, { token }),
+
+  // Success Stories
+  getSuccessStories: (token: string, limit?: number) =>
+    request<SuccessStory[]>(`/success-stories?limit=${limit || 10}`, { token }),
+  getSuccessStory: (token: string, storyId: string) =>
+    request<SuccessStory>(`/success-stories/${storyId}`, { token }),
+
+  // Leaderboard
+  getLeaderboard: (token: string, params: LeaderboardQueryParams) =>
+    request<LeaderboardEntry[]>(
+      `/leaderboard?metric=${params.metric}&period=${params.period}&limit=${params.limit || 10}`,
+      { token },
+    ),
+  getMyRank: (token: string, metric: string, period: string) =>
+    request<LeaderboardEntry>(`/leaderboard/my-rank?metric=${metric}&period=${period}`, { token }),
 };

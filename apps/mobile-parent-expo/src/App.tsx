@@ -26,7 +26,7 @@ import { api } from './api';
 import { API_BASE_URL } from './config';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'home' | 'children' | 'drivers' | 'track';
+type Screen = 'auth' | 'home' | 'children' | 'drivers' | 'track' | 'referrals';
 
 type ChildRecord = ChildUpsertInput & { id: string };
 type InstitutionRecord = { id: string; name: string; address: string; type: string };
@@ -71,6 +71,9 @@ export default function App() {
   const [childDraft, setChildDraft] = useState<ChildUpsertInput>(emptyChildDraft());
   const [status, setStatus] = useState('Sign in to see child status, driver trust, and trip readiness.');
   const [loading, setLoading] = useState(false);
+  const [referralCode, setReferralCode] = useState('');
+  const [referralEarnings, setReferralEarnings] = useState(0);
+  const [referralStats, setReferralStats] = useState<any>(null);
 
   const assignment = assignmentState?.primary || null;
   const trip = tripState?.trip || null;
@@ -131,15 +134,19 @@ export default function App() {
 
   async function refreshHome() {
     try {
-      const [childrenData, assignmentData, nextTripState] = await Promise.all([
+      const [childrenData, assignmentData, nextTripState, refCode, earnings] = await Promise.all([
         api.listChildren(token),
         api.currentAssignment(token),
         api.currentTrip(token),
+        api.getReferralCode(token).then((r) => r.referralCode).catch(() => ''),
+        api.getMyReferralEarnings(token).then((r) => r.totalEarnings).catch(() => 0),
       ]);
       setChildren(childrenData);
       setAssignmentState(assignmentData);
       setTripState(nextTripState);
       setEvents(nextTripState.timeline || []);
+      setReferralCode(refCode);
+      setReferralEarnings(earnings);
       if (nextTripState.latestLocation) {
         setDriverLoc({
           latitude: nextTripState.latestLocation.lat,
@@ -429,6 +436,55 @@ export default function App() {
     );
   }
 
+  if (screen === 'referrals') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Referral earnings</Text>
+          <Text style={styles.bodyDark}>Earn ₹200 each time a referred parent pays for 3 months of service.</Text>
+          {loading ? <ActivityIndicator color={colors.accent} /> : null}
+
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Your referral code</Text>
+            <Text style={styles.metric}>{referralCode || 'Loading...'}</Text>
+            <Button title="Copy code" onPress={() => {
+              if (referralCode) {
+                // In a real app, use Clipboard API
+                setStatus('Referral code copied!');
+              }
+            }} />
+          </View>
+
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Total earnings</Text>
+            <Text style={styles.kicker}>₹{referralEarnings}</Text>
+            <Text style={styles.metric}>From {referralStats?.totalReferrals || 0} referrals</Text>
+            <Text style={styles.metric}>Potential: ₹{referralStats?.potentialEarnings || 0}</Text>
+          </View>
+
+          {referralStats?.referrals && referralStats.referrals.length > 0 ? (
+            <View style={styles.cardInline}>
+              <Text style={styles.cardTitle}>Your referrals</Text>
+              {referralStats.referrals.map((ref: any) => (
+                <View key={ref.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{ref.referredParentName}</Text>
+                    <Text style={styles.metric}>Status: {ref.status}</Text>
+                    <Text style={styles.metric}>Referred: {new Date(ref.createdAt).toLocaleDateString()}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <EmptyState title="No referrals yet" body="Share your referral code with other parents to start earning." />
+          )}
+
+          <Button title="Back home" onPress={() => setScreen('home')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (screen === 'track') {
     return (
       <SafeAreaView style={styles.page}>
@@ -474,6 +530,16 @@ export default function App() {
           <Text style={styles.titleDark}>{childStatus}</Text>
           <Text style={styles.bodyDark}>{status}</Text>
         </View>
+
+        {referralEarnings > 0 || referralCode ? (
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Referral earnings</Text>
+            <Text style={styles.kicker}>₹{referralEarnings}</Text>
+            <Text style={styles.metric}>Total earned from referrals</Text>
+            <Button title="View details" onPress={() => setScreen('referrals')} />
+          </View>
+        ) : null}
+
         <View style={styles.cardInline}>
           <Text style={styles.cardTitle}>Assigned driver</Text>
           <Text style={styles.metric}>{assignment?.driver?.name || 'No active assignment yet'}</Text>
@@ -495,6 +561,7 @@ export default function App() {
           <Button title="Manage children" onPress={() => setScreen('children')} />
           <Button title="Find driver" onPress={searchDrivers} />
           <Button title="Open tracking" onPress={() => setScreen('track')} />
+          <Button title="Earnings" onPress={() => setScreen('referrals')} />
           <Button title="Refresh state" onPress={refreshHome} />
           <Button title="Sign out" onPress={signOut} />
         </View>
