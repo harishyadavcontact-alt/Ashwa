@@ -1,0 +1,10 @@
+# Ashwa Supabase Configuration
+# Edge Functions and database setup
+
+[functions.send-whatsapp]
+verify_jwt = true
+
+# Environment variables for Twilio
+# TWILIO_ACCOUNT_SID = "your-twilio-account-sid"
+# TWILIO_AUTH_TOKEN = "your-twilio-auth-token"
+# TWILIO_WHATSAPP_NUMBER = "whatsapp:+1234567890"

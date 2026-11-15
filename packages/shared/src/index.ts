@@ -268,3 +268,134 @@ export type CurrentTripState = {
   manifest: ChildSummary[];
   timeline: TimelineEventSummary[];
 };
+
+// Hiring System Types
+export const JobStatusSchema = z.enum(['OPEN', 'HIRED', 'CLOSED']);
+export type JobStatus = z.infer<typeof JobStatusSchema>;
+
+export const RouteSchema = z.object({
+  id: z.string(),
+  school: z.string(),
+  direction: z.string(),
+  time: z.string(),
+});
+export type Route = z.infer<typeof RouteSchema>;
+
+export type Job = {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  route: Route;
+  payPerMonth: number;
+  status: JobStatus;
+  hiredDriverId?: string;
+  hiredDriverName?: string;
+  createdAt: string;
+  appliedCount: number;
+};
+
+export type JobApplication = {
+  id: string;
+  jobId: string;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  status: 'PENDING' | 'CONTACTED';
+  appliedAt: string;
+};
+
+export type TeamMember = {
+  id: string;
+  name: string;
+  photoUrl?: string;
+  route: Route;
+  monthlyPay: number;
+  earningsThisMonth: number;
+  status: 'ACTIVE' | 'INACTIVE';
+  phone?: string;
+};
+
+export type PayrollRecord = {
+  id: string;
+  driverId: string;
+  driverName: string;
+  month: string;
+  amount: number;
+  status: 'PENDING' | 'PAID';
+  paidAt?: string;
+};
+
+export const JobPostSchema = z.object({
+  routeId: z.string().min(1),
+  payPerMonth: z.number().min(1000),
+});
+export type JobPostInput = z.infer<typeof JobPostSchema>;
+
+export const JobApplySchema = z.object({
+  jobId: z.string().min(1),
+});
+export type JobApplyInput = z.infer<typeof JobApplySchema>;
+
+// Referral System Types
+export const PaymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED']);
+export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
+
+export type ReferralSummary = {
+  id: string;
+  referralCode: string;
+  referredParentId: string;
+  referredParentName: string;
+  status: string;
+  createdAt: string;
+};
+
+export type ReferralEarnings = {
+  id: string;
+  referredParentId: string;
+  referredParentName: string;
+  amount: number;
+  month: number;
+  year: number;
+  status: string;
+  createdAt: string;
+};
+
+export type ParentReferralStats = {
+  referralCode: string;
+  totalReferrals: number;
+  totalEarnings: number;
+  potentialEarnings: number;
+  referrals: ReferralSummary[];
+  earnedHistory: ReferralEarnings[];
+};
+
+export const PaymentRecordSchema = z.object({
+  childId: z.string().min(1),
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2020),
+  amount: z.number().int().min(0),
+  status: PaymentStatusSchema,
+});
+export type PaymentRecordInput = z.infer<typeof PaymentRecordSchema>;
+
+// Re-export WhatsApp extras
+export { sendWhatsAppAlert, getDemoLogs, clearDemoLogs, type WhatsAppAlertPayload } from './extras';
+
+// Re-export Success Stories and Leaderboard types
+export {
+  SuccessStorySchema,
+  SuccessStoryMetricsSchema,
+  PublishStorySchema,
+  LeaderboardBadgeSchema,
+  MetricTypeSchema,
+  LeaderboardPeriodSchema,
+  LeaderboardEntrySchema,
+  type SuccessStory,
+  type SuccessStoryMetrics,
+  type PublishStoryInput,
+  type LeaderboardBadge,
+  type MetricType,
+  type LeaderboardPeriod,
+  type LeaderboardEntry,
+  type LeaderboardQueryParams,
+} from './success-stories';

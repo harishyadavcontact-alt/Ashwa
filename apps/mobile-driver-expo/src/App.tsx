@@ -1,4 +1,5 @@
-import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType } from '@ashwa/shared';
+import type { CurrentAssignmentState, CurrentTripState, DriverServiceSummary, EventType, Job, TeamMember, PayrollRecord, Route } from '@ashwa/shared';
+import { sendWhatsAppAlert } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -16,7 +17,7 @@ import {
 import { api } from './api';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -56,6 +57,21 @@ export default function App() {
   });
   const [status, setStatus] = useState('Sign in to see the next operational action.');
   const [loading, setLoading] = useState(false);
+
+  // Hiring system state
+  const [myJobs, setMyJobs] = useState<Job[]>([]);
+  const [availableJobs, setAvailableJobs] = useState<Job[]>([]);
+  const [myTeam, setMyTeam] = useState<TeamMember[]>([]);
+  const [payrollHistory, setPayrollHistory] = useState<PayrollRecord[]>([]);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [newJobRoute, setNewJobRoute] = useState('');
+  const [newJobPay, setNewJobPay] = useState('12000');
+  const [routes] = useState<Route[]>([
+    { id: '1', school: 'School A', direction: 'Morning North', time: '07:00 AM' },
+    { id: '2', school: 'School B', direction: 'Morning South', time: '07:30 AM' },
+    { id: '3', school: 'School A', direction: 'Afternoon North', time: '01:00 PM' },
+    { id: '4', school: 'School C', direction: 'Evening East', time: '04:00 PM' },
+  ]);
 
   const incoming = incomingState?.items || [];
   const accepted = assignmentState?.items || [];
@@ -235,6 +251,19 @@ export default function App() {
     setLoading(true);
     try {
       await api.emitEvent(token, trip.id, focusedChildId, eventType);
+
+      // Send WhatsApp alert to parent
+      const focusedChild = tripState?.manifest?.find((child) => child.id === focusedChildId);
+      if (focusedChild) {
+        // Note: In demo mode, phone number is logged to console/localStorage
+        // In production, this would be fetched from the parent record
+        await sendWhatsAppAlert({
+          parentPhoneNumber: '+1234567890', // Demo phone - would come from parent record in production
+          childName: focusedChild.name,
+          eventType,
+        });
+      }
+
       setStatus(`Event emitted: ${eventType.replaceAll('_', ' ')}`);
       await refresh();
     } catch (error: any) {
@@ -252,6 +281,190 @@ export default function App() {
     setAssignmentState(null);
     setTripState(null);
     setDriverSummary(null);
+  }
+
+  // Hiring system functions
+  async function postJobMock() {
+    if (!newJobRoute || !newJobPay) {
+      setStatus('Please select a route and enter pay amount.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const route = routes.find((r) => r.id === newJobRoute);
+      if (!route) {
+        setStatus('Invalid route selected.');
+        return;
+      }
+
+      // Store in localStorage for demo
+      const jobs = await AsyncStorage.getItem('ashwa.jobs');
+      const jobList: Job[] = jobs ? JSON.parse(jobs) : [];
+      const newJob: Job = {
+        id: Math.random().toString(36).substr(2, 9),
+        ownerId: token || 'demo-owner',
+        ownerName: profile.name,
+        route,
+        payPerMonth: Number(newJobPay),
+        status: 'OPEN',
+        createdAt: new Date().toISOString(),
+        appliedCount: 0,
+      };
+      jobList.push(newJob);
+      await AsyncStorage.setItem('ashwa.jobs', JSON.stringify(jobList));
+      await loadJobs();
+      setNewJobRoute('');
+      setNewJobPay('12000');
+      setScreen('jobs');
+      setStatus('Job posted successfully!');
+    } catch (error: any) {
+      setStatus(error.message || 'Could not post job.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadJobs() {
+    try {
+      const jobs = await AsyncStorage.getItem('ashwa.jobs');
+      const jobList: Job[] = jobs ? JSON.parse(jobs) : [];
+      const myOwnerJobs = jobList.filter((j) => j.ownerId === token);
+      const otherJobs = jobList.filter((j) => j.ownerId !== token && j.status === 'OPEN');
+      setMyJobs(myOwnerJobs);
+      setAvailableJobs(otherJobs);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load jobs.');
+    }
+  }
+
+  async function applyForJobMock(jobId: string) {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const job = availableJobs.find((j) => j.id === jobId);
+      if (!job) {
+        setStatus('Job not found.');
+        return;
+      }
+
+      // Store application
+      const apps = await AsyncStorage.getItem('ashwa.job_applications');
+      const appList: any[] = apps ? JSON.parse(apps) : [];
+      appList.push({
+        jobId,
+        driverId: token,
+        driverName: profile.name,
+        driverPhone: '+919876543210',
+        appliedAt: new Date().toISOString(),
+      });
+      await AsyncStorage.setItem('ashwa.job_applications', JSON.stringify(appList));
+
+      // Send WhatsApp to owner
+      const ownerPhone = '+919876543200'; // Demo phone
+      const message = `Hi ${job.ownerName}, I'm interested in your ₹${job.payPerMonth} ${job.route.school} ${job.route.time} job. - ${profile.name}`;
+      setStatus(`Applied! WhatsApp message queued to owner: "${message}"`);
+      await loadJobs();
+    } catch (error: any) {
+      setStatus(error.message || 'Could not apply for job.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function hireDriverMock(jobId: string, driverId: string) {
+    setLoading(true);
+    try {
+      const jobs = await AsyncStorage.getItem('ashwa.jobs');
+      const jobList: Job[] = jobs ? JSON.parse(jobs) : [];
+      const job = jobList.find((j) => j.id === jobId);
+      if (!job) {
+        setStatus('Job not found.');
+        return;
+      }
+
+      // Update job status
+      job.status = 'HIRED';
+      job.hiredDriverId = driverId;
+      job.hiredDriverName = profile.name; // This would come from driver lookup
+
+      await AsyncStorage.setItem('ashwa.jobs', JSON.stringify(jobList));
+
+      // Create team member record
+      const teamData = await AsyncStorage.getItem('ashwa.team');
+      const team: TeamMember[] = teamData ? JSON.parse(teamData) : [];
+      const newMember: TeamMember = {
+        id: driverId,
+        name: profile.name,
+        route: job.route,
+        monthlyPay: job.payPerMonth,
+        earningsThisMonth: 0,
+        status: 'ACTIVE',
+        phone: '+919876543210',
+      };
+      team.push(newMember);
+      await AsyncStorage.setItem('ashwa.team', JSON.stringify(team));
+
+      setStatus('Driver hired! Team member added.');
+      await loadTeam();
+      await loadJobs();
+    } catch (error: any) {
+      setStatus(error.message || 'Could not hire driver.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadTeam() {
+    try {
+      const teamData = await AsyncStorage.getItem('ashwa.team');
+      const team: TeamMember[] = teamData ? JSON.parse(teamData) : [];
+      setMyTeam(team);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load team.');
+    }
+  }
+
+  async function loadPayroll() {
+    try {
+      const payrollData = await AsyncStorage.getItem('ashwa.payroll');
+      const payroll: PayrollRecord[] = payrollData ? JSON.parse(payrollData) : [];
+      setPayrollHistory(payroll);
+    } catch (error: any) {
+      setStatus(error.message || 'Could not load payroll.');
+    }
+  }
+
+  async function processMonthlyPayroll() {
+    setLoading(true);
+    try {
+      const payrollData = await AsyncStorage.getItem('ashwa.payroll');
+      const payroll: PayrollRecord[] = payrollData ? JSON.parse(payrollData) : [];
+
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+
+      myTeam.forEach((member) => {
+        const existing = payroll.find((p) => p.driverId === member.id && p.month === currentMonth);
+        if (!existing) {
+          payroll.push({
+            id: Math.random().toString(36).substr(2, 9),
+            driverId: member.id,
+            driverName: member.name,
+            month: currentMonth,
+            amount: member.monthlyPay,
+            status: 'PENDING',
+          });
+        }
+      });
+
+      await AsyncStorage.setItem('ashwa.payroll', JSON.stringify(payroll));
+      await loadPayroll();
+      setStatus('Payroll calculated for this month!');
+    } catch (error: any) {
+      setStatus(error.message || 'Could not process payroll.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   const nextAction = useMemo(() => {
@@ -345,6 +558,190 @@ export default function App() {
     );
   }
 
+  // Post Job Screen
+  if (screen === 'post-job') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Post a Job</Text>
+          <Text style={styles.bodyDark}>Hire another driver for one of your routes.</Text>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Select Route</Text>
+            {routes.map((route) => (
+              <View key={route.id} style={[styles.row, { marginBottom: 8, paddingVertical: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{route.school}</Text>
+                  <Text style={styles.metric}>{route.direction} | {route.time}</Text>
+                </View>
+                <Button
+                  title={newJobRoute === route.id ? 'Selected' : 'Select'}
+                  onPress={() => setNewJobRoute(route.id)}
+                />
+              </View>
+            ))}
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Monthly Pay (₹)</Text>
+            <TextInput
+              value={newJobPay}
+              onChangeText={setNewJobPay}
+              placeholder="12000"
+              style={styles.input}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View style={styles.cardInline}>
+            <Text style={styles.cardTitle}>Preview</Text>
+            {newJobRoute && (
+              <>
+                <Text style={styles.metric}>Route: {routes.find((r) => r.id === newJobRoute)?.school}</Text>
+                <Text style={styles.metric}>Pay: ₹{newJobPay}</Text>
+              </>
+            )}
+          </View>
+          <View style={styles.actions}>
+            <Button title={loading ? 'Posting...' : 'Post Job'} onPress={postJobMock} disabled={loading} />
+            <Button title="Back to jobs" onPress={() => setScreen('jobs')} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // My Jobs Screen (for hiring)
+  if (screen === 'jobs') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>My Jobs</Text>
+          <Text style={styles.bodyDark}>Post jobs and manage your team.</Text>
+          {myJobs.length > 0 && (
+            <View style={styles.cardInline}>
+              <Text style={styles.cardTitle}>Posted Jobs ({myJobs.length})</Text>
+              {myJobs.map((job) => (
+                <View key={job.id} style={[styles.row, { marginBottom: 8 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{job.route.school}</Text>
+                    <Text style={styles.metric}>{job.route.direction} | {job.route.time}</Text>
+                    <Text style={styles.metric}>₹{job.payPerMonth}/month | {job.status}</Text>
+                    <Text style={styles.metric}>Applied: {job.appliedCount}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+          <View style={styles.actions}>
+            <Button title="Post New Job" onPress={() => setScreen('post-job')} />
+            <Button title="Browse Available Jobs" onPress={() => { loadJobs(); setScreen('apply-jobs'); }} />
+            <Button title="My Team" onPress={() => { loadTeam(); setScreen('team'); }} />
+            <Button title="Payroll" onPress={() => { loadPayroll(); setScreen('payroll'); }} />
+            <Button title="Trip Dashboard" onPress={() => setScreen('trip')} />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Browse Jobs Screen
+  if (screen === 'apply-jobs') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Available Jobs</Text>
+          <Text style={styles.bodyDark}>Find driver jobs to apply for.</Text>
+          {availableJobs.length > 0 ? (
+            <FlatList
+              data={availableJobs}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', marginBottom: 12 }]}>
+                  <View style={{ width: '100%', marginBottom: 8 }}>
+                    <Text style={styles.cardTitle}>{item.route.school}</Text>
+                    <Text style={styles.metric}>Posted by: {item.ownerName}</Text>
+                    <Text style={styles.metric}>{item.route.direction} | {item.route.time}</Text>
+                    <Text style={styles.metric}>₹{item.payPerMonth}/month</Text>
+                  </View>
+                  <Button title="Apply Now" onPress={() => applyForJobMock(item.id)} />
+                </View>
+              )}
+            />
+          ) : (
+            <EmptyState title="No jobs available" body="Check back later for new opportunities." />
+          )}
+          <Button title="Back to my jobs" onPress={() => setScreen('jobs')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // My Team Screen
+  if (screen === 'team') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>My Team</Text>
+          <Text style={styles.bodyDark}>View and manage hired drivers.</Text>
+          {myTeam.length > 0 ? (
+            <FlatList
+              data={myTeam}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.cardInline}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.metric}>Route: {item.route.school} - {item.route.time}</Text>
+                  <Text style={styles.metric}>Monthly Pay: ₹{item.monthlyPay}</Text>
+                  <Text style={styles.metric}>Earned this month: ₹{item.earningsThisMonth}</Text>
+                  <Text style={styles.metric}>Status: {item.status}</Text>
+                  {item.phone && <Text style={styles.metric}>Phone: {item.phone}</Text>}
+                </View>
+              )}
+            />
+          ) : (
+            <EmptyState title="No team members" body="Post a job and hire drivers to build your team." />
+          )}
+          <Button title="Post a job" onPress={() => setScreen('post-job')} />
+          <Button title="Back to jobs" onPress={() => setScreen('jobs')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Payroll Screen
+  if (screen === 'payroll') {
+    return (
+      <SafeAreaView style={styles.page}>
+        <ScrollView contentContainerStyle={styles.stack}>
+          <Text style={styles.titleDark}>Payroll History</Text>
+          <Text style={styles.bodyDark}>Track salary payments to your drivers.</Text>
+          <View style={styles.cardInline}>
+            <Button title="Process Monthly Payroll" onPress={processMonthlyPayroll} disabled={loading} />
+          </View>
+          {payrollHistory.length > 0 ? (
+            <FlatList
+              data={payrollHistory}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <View style={styles.cardInline}>
+                  <Text style={styles.cardTitle}>{item.driverName}</Text>
+                  <Text style={styles.metric}>Month: {item.month}</Text>
+                  <Text style={styles.metric}>Amount: ₹{item.amount}</Text>
+                  <Text style={styles.metric}>Status: {item.status}</Text>
+                  {item.paidAt && <Text style={styles.metric}>Paid: {new Date(item.paidAt).toLocaleDateString()}</Text>}
+                </View>
+              )}
+            />
+          ) : (
+            <EmptyState title="No payroll records" body="Process monthly payroll to see payment history." />
+          )}
+          <Button title="Back to jobs" onPress={() => setScreen('jobs')} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <ScrollView contentContainerStyle={styles.stack}>
@@ -395,6 +792,7 @@ export default function App() {
           <Button title="Ping location now" onPress={() => pingLocation('Location ping sent for the active trip.')} />
           <Button title="End trip" onPress={endTrip} />
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
+          <Button title="Hiring System" onPress={() => { loadJobs(); setScreen('jobs'); }} />
           <Button title="Sign out" onPress={signOut} />
         </View>
       </ScrollView>

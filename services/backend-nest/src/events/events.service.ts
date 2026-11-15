@@ -57,19 +57,106 @@ export class EventsService {
   }
 
   async notifyParent(childId: string, eventType: string, tripId: string) {
-    const child = await this.prisma.child.findUnique({ where: { id: childId } });
-    if (!child) return;
-    const tokens = await this.prisma.deviceToken.findMany({ where: { userId: child.parentId } });
-    if (!tokens.length) return;
-    if (!this.messaging) {
-      this.logger.warn(`notification skipped (FCM disabled) event=${eventType}`);
-      return;
-    }
-    const res = await this.messaging.sendEachForMulticast({
-      tokens: tokens.map((t) => t.token),
-      notification: { title: 'Ashwa Trip Update', body: `${eventType.replaceAll('_', ' ')}` },
-      data: { tripId, childId, eventType },
+    const child = await this.prisma.child.findUnique({
+      where: { id: childId },
+      include: { parent: true },
     });
-    this.logger.log(`notification sent success=${res.successCount} fail=${res.failureCount}`);
+    if (!child) return;
+
+    const tokens = await this.prisma.deviceToken.findMany({
+      where: { userId: child.parentId },
+    });
+
+    // Send Firebase Cloud Messaging notification if enabled
+    if (tokens.length && this.messaging) {
+      const res = await this.messaging.sendEachForMulticast({
+        tokens: tokens.map((t) => t.token),
+        notification: { title: 'Ashwa Trip Update', body: `${eventType.replaceAll('_', ' ')}` },
+        data: { tripId, childId, eventType },
+      });
+      this.logger.log(`notification sent success=${res.successCount} fail=${res.failureCount}`);
+    } else if (!this.messaging) {
+      this.logger.warn(`FCM notification skipped (FCM disabled) event=${eventType}`);
+    }
+
+    // Send WhatsApp alert if parent has phone number
+    if (child.parent?.phone) {
+      await this.sendWhatsAppAlert(child.parent.phone, child.name, eventType);
+    }
+  }
+
+  private async sendWhatsAppAlert(
+    phoneNumber: string,
+    childName: string,
+    eventType: string,
+  ): Promise<void> {
+    try {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+      if (!supabaseUrl || !supabaseServiceKey) {
+        this.logger.warn(`WhatsApp alert skipped: Supabase not configured event=${eventType}`);
+        return;
+      }
+
+      // Message templates for each event type
+      const templates: Record<string, (name: string) => string> = {
+        DRIVER_10_MIN_TO_PICKUP: (name) => `${name} driver will be at pickup in 10 minutes.`,
+        DRIVER_AT_PICKUP: (name) => `Driver is at ${name}'s pickup location.`,
+        CHILD_BOARDED: (name) => `✓ Picked up ${name}. On the way to school.`,
+        DRIVER_AT_SCHOOL: (name) => `✓ ${name} reached school.`,
+        DRIVER_LEFT_SCHOOL: (name) => `✓ Left school. ${name} will be home soon.`,
+        DRIVER_10_MIN_TO_DROP: (name) => `${name} driver will be at drop-off in 10 minutes.`,
+        DRIVER_AT_DROP: (name) => `Driver is at ${name}'s drop-off location.`,
+        CHILD_DROPPED: (name) => `✓ Dropped ${name} home. See you tomorrow!`,
+      };
+
+      const message = templates[eventType]?.(childName);
+      if (!message) {
+        this.logger.warn(`Unknown event type for WhatsApp: ${eventType}`);
+        return;
+      }
+
+      // Call Supabase Edge Function
+      const response = await fetch(`${supabaseUrl}/functions/v1/send-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: phoneNumber,
+          message,
+          metadata: {
+            eventType,
+            childName,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        this.logger.error(
+          `WhatsApp alert failed event=${eventType} phone=${this.maskPhone(phoneNumber)}`,
+          error,
+        );
+      } else {
+        const result = await response.json();
+        this.logger.log(
+          `WhatsApp alert sent event=${eventType} child=${childName} sid=${result.messageSid}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `WhatsApp alert error event=${eventType} child=${childName}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  private maskPhone(phone: string): string {
+    // Mask phone number for logging: +1****5890
+    if (phone.length < 6) return phone;
+    return phone.slice(0, 2) + '*'.repeat(phone.length - 6) + phone.slice(-4);
   }
 }
