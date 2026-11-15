@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   SafeAreaView,
   Dimensions,
+  Animated,
 } from 'react-native';
 import MapView, { Marker, AnimatedRegion } from 'react-native-maps';
 import { ActionBar } from './ActionBar';
 import { ReferralCard } from './ReferralCard';
+import { InfoTip } from './InfoTip';
 import { colors } from './theme';
 import type {
   DriverServiceSummary,
@@ -40,6 +42,7 @@ interface ParentHomeProps {
   onAttendanceHistory: () => void;
   onReferrals: () => void;
   onSettings: () => void;
+  onMore: () => void;
   onLogout: () => void;
   onTrackingOpen: () => void;
   onEmergency: () => void;
@@ -62,6 +65,7 @@ export function ParentHome({
   onAttendanceHistory,
   onReferrals,
   onSettings,
+  onMore,
   onLogout,
   onTrackingOpen,
   onEmergency,
@@ -69,6 +73,11 @@ export function ParentHome({
 }: ParentHomeProps) {
   const [showCallModal, setShowCallModal] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
+  const [demoStartTime, setDemoStartTime] = useState<number | null>(null);
+  const [demoDemoLoc, setDemoDemoLoc] = useState({ latitude: 12.97, longitude: 77.59 });
+  const [demoStatus, setDemoStatus] = useState('');
+  const [showInfoTip, setShowInfoTip] = useState(false);
+  const [demoHasRun, setDemoHasRun] = useState(false);
   const [locationLastUpdated, setLocationLastUpdated] = useState(new Date());
   const mapRef = useRef<MapView>(null);
   const animatedRegion = useRef(
@@ -126,12 +135,59 @@ export function ParentHome({
   // Auto-update location every 10 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      if (trip?.status === 'ACTIVE') {
+      if (trip?.status === 'ACTIVE' && !demoMode) {
         setLocationLastUpdated(new Date());
       }
     }, MAP_UPDATE_INTERVAL);
     return () => clearInterval(interval);
-  }, [trip?.status]);
+  }, [trip?.status, demoMode]);
+
+  // Demo ride animation
+  useEffect(() => {
+    if (!demoMode || !demoStartTime) return;
+
+    const demoInterval = setInterval(() => {
+      const elapsed = (Date.now() - demoStartTime) / 1000; // seconds
+      const progress = Math.min(elapsed / 120, 1); // 2-minute demo
+
+      if (progress < 0.25) {
+        // 0-30s: Van moves toward school
+        setDemoDemoLoc({
+          latitude: 12.97 + (12.99 - 12.97) * (progress / 0.25),
+          longitude: 77.59 + (77.61 - 77.59) * (progress / 0.25),
+        });
+        setDemoStatus('Van on the way...');
+      } else if (progress < 0.5) {
+        // 30-60s: Van arrives at school, child boards
+        setDemoDemoLoc({ latitude: 12.99, longitude: 77.61 });
+        const seconds = Math.floor(progress * 120);
+        setDemoStatus(`Boarded ${7 + Math.floor(seconds / 60)}:${String(45 + (seconds % 60)).padStart(2, '0')}`);
+      } else if (progress < 0.75) {
+        // 60-90s: Van returns home
+        const subProgress = (progress - 0.5) / 0.25;
+        setDemoDemoLoc({
+          latitude: 12.99 - (12.99 - 12.98) * subProgress,
+          longitude: 77.61 - (77.61 - 77.60) * subProgress,
+        });
+        setDemoStatus('At school');
+      } else if (progress < 1) {
+        // 90-120s: Arriving home, celebration
+        const subProgress = (progress - 0.75) / 0.25;
+        setDemoDemoLoc({
+          latitude: 12.98 - (12.98 - 12.97) * subProgress,
+          longitude: 77.60 - (77.60 - 77.59) * subProgress,
+        });
+        setDemoStatus(`Dropped ${3}:${15 + Math.floor(subProgress * 45)}`);
+      } else {
+        // Demo complete
+        setDemoMode(false);
+        setDemoHasRun(true);
+        setDemoStatus('');
+      }
+    }, 500);
+
+    return () => clearInterval(demoInterval);
+  }, [demoMode, demoStartTime]);
 
   // Show active call modal
   useEffect(() => {
@@ -271,10 +327,19 @@ export function ParentHome({
           </View>
         )}
 
-        {/* Top-Right: SOS Button */}
-        <TouchableOpacity style={styles.sosButton} onPress={onEmergency} activeOpacity={0.8}>
-          <Text style={styles.sosButtonText}>🚨 SOS</Text>
-        </TouchableOpacity>
+        {/* Top-Right: Info Button + SOS Button */}
+        <View style={styles.topRightButtons}>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowInfoTip(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.infoButtonText}>ⓘ</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sosButton} onPress={onEmergency} activeOpacity={0.8}>
+            <Text style={styles.sosButtonText}>🚨 SOS</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Tracking Button */}
         {trip?.status === 'ACTIVE' && (
@@ -326,9 +391,7 @@ export function ParentHome({
         onCallDriver={onCallDriver}
         onAttendanceHistory={onAttendanceHistory}
         onReferrals={onReferrals}
-        onMorePress={() => {
-          // Open more menu
-        }}
+        onMorePress={onMore}
         onSettings={onSettings}
         onLogout={onLogout}
         isLoading={isLoading}

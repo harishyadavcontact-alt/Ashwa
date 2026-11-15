@@ -25,9 +25,17 @@ import { VerificationBadge } from './VerificationBadge';
 import { VerificationForm } from './VerificationForm';
 import { OptimizedTripScreen } from './OptimizedTripScreen';
 import { OwnerDashboard } from './OwnerDashboard';
+import { MoreMenu } from './MoreMenu';
+import { SettingsScreen } from './SettingsScreen';
+import { EarningsBreakdownScreen } from './EarningsBreakdownScreen';
+import { LoanManagementScreen } from './LoanManagementScreen';
+import { ReferralsScreen } from './ReferralsScreen';
+import { DocumentsScreen } from './DocumentsScreen';
+import { SupportScreen } from './SupportScreen';
+import { PrivacyScreen } from './PrivacyScreen';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history' | 'owner-dashboard';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history' | 'owner-dashboard' | 'more' | 'settings' | 'earnings' | 'my-referrals' | 'loan-status' | 'documents' | 'support' | 'privacy';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
@@ -67,6 +75,28 @@ export default function App() {
   });
   const [status, setStatus] = useState('Sign in to see the next operational action.');
   const [loading, setLoading] = useState(false);
+
+  // More menu state
+  const [userEmail, setUserEmail] = useState('driver@ashwa.app');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [whatsAppNotifications, setWhatsAppNotifications] = useState(true);
+  const [thisMonthEarnings, setThisMonthEarnings] = useState(83000);
+  const [referrals, setReferrals] = useState([
+    { id: '1', name: 'Priya', status: 'ACTIVE' as const, bonusEarned: 500 },
+    { id: '2', name: 'Ahmed', status: 'PENDING' as const, bonusEarned: 0 },
+  ]);
+  const [documents, setDocuments] = useState([
+    { id: '1', title: 'Driver License', type: 'LICENSE' as const, expiryDate: '2025-06-30', status: 'VERIFIED' as const, url: 'https://demo.com/license.pdf' },
+    { id: '2', title: 'Insurance Policy', type: 'INSURANCE' as const, expiryDate: '2025-12-31', status: 'VERIFIED' as const, url: 'https://demo.com/insurance.pdf' },
+  ]);
+  const [loanSchedule, setLoanSchedule] = useState([
+    { dueDate: '15 Dec 2024', amount: 8333, status: 'PAID' as const },
+    { dueDate: '15 Jan 2025', amount: 8333, status: 'PAID' as const },
+    { dueDate: '15 Feb 2025', amount: 8333, status: 'PENDING' as const },
+    { dueDate: '15 Mar 2025', amount: 8333, status: 'PENDING' as const },
+    { dueDate: '15 Apr 2025', amount: 8333, status: 'PENDING' as const },
+    { dueDate: '15 May 2025', amount: 8333, status: 'PENDING' as const },
+  ]);
 
   // Hiring system state
   const [myJobs, setMyJobs] = useState<Job[]>([]);
@@ -1668,6 +1698,114 @@ export default function App() {
     );
   }
 
+  if (screen === 'more') {
+    return (
+      <MoreMenu
+        role="driver"
+        onNavigate={setScreen}
+        onLogout={signOut}
+        userName={profile.name}
+      />
+    );
+  }
+
+  if (screen === 'settings') {
+    return (
+      <SettingsScreen
+        userName={profile.name}
+        userPhone="+91-98765-43210"
+        userEmail={userEmail}
+        isDarkMode={isDarkMode}
+        whatsAppNotifications={whatsAppNotifications}
+        onChangeName={(name) => setProfile({ ...profile, name })}
+        onChangeEmail={setUserEmail}
+        onToggleDarkMode={setIsDarkMode}
+        onToggleWhatsApp={setWhatsAppNotifications}
+        onSave={() => setStatus('Settings saved!')}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'earnings') {
+    return (
+      <EarningsBreakdownScreen
+        thisMonthEarnings={thisMonthEarnings}
+        routeEarnings={[
+          { name: 'School A', amount: 50000 },
+          { name: 'School B', amount: 20000 },
+          { name: 'Dance Academy', amount: 10000 },
+        ]}
+        referralEarnings={2000}
+        bonusEarnings={1000}
+        allTimeEarnings={250000}
+        trend={[
+          { month: 'Aug', amount: 75000 },
+          { month: 'Sep', amount: 78000 },
+          { month: 'Oct', amount: 80000 },
+          { month: 'Nov', amount: 82000 },
+          { month: 'Dec', amount: 83000 },
+          { month: 'Jan', amount: 83000 },
+        ]}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'my-referrals') {
+    return (
+      <ReferralsScreen
+        referrals={referrals}
+        totalBonusEarned={500}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'loan-status') {
+    return (
+      <LoanManagementScreen
+        loanStatus="ACTIVE"
+        principal={500000}
+        monthlyPayment={8333}
+        interestRate={8}
+        remaining={200000}
+        nextDueDate="15 February 2025"
+        autoDeductEnabled={true}
+        schedule={loanSchedule}
+        onToggleAutoDeduct={(enabled) => setStatus(`Auto-deduct ${enabled ? 'enabled' : 'disabled'}`)}
+        onPayEarly={() => setStatus('Payment initiated...')}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'documents') {
+    return (
+      <DocumentsScreen
+        documents={documents}
+        onDownload={(docId) => setStatus(`Downloading document ${docId}...`)}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'support') {
+    return (
+      <SupportScreen
+        role="driver"
+        onCall={() => setStatus('Calling support team...')}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'privacy') {
+    return (
+      <PrivacyScreen onBack={() => setScreen('more')} />
+    );
+  }
+
   // Use OptimizedTripScreen when trip is active, fallback to original dashboard
   if (trip?.id) {
     return (
@@ -1790,6 +1928,7 @@ export default function App() {
           <Button title="Route Analytics" onPress={() => setScreen('analytics')} color={colors.accent} />
           <Button title="Owner Dashboard" onPress={() => setScreen('owner-dashboard')} color="#22c55e" />
           <Button title="Hiring System" onPress={() => { loadJobs(); setScreen('jobs'); }} />
+          <Button title="More" onPress={() => setScreen('more')} color={colors.accent} />
           <Button title="Sign out" onPress={signOut} />
         </View>
       </ScrollView>

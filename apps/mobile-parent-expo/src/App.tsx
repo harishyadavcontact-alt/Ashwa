@@ -37,8 +37,13 @@ import { API_BASE_URL } from './config';
 import { colors } from './theme';
 import { ParentHome } from './ParentHome';
 import { ReferralCard } from './ReferralCard';
+import { MoreMenu } from './MoreMenu';
+import { SettingsScreen } from './SettingsScreen';
+import { ReferralEarningsScreen } from './ReferralEarningsScreen';
+import { SupportScreen } from './SupportScreen';
+import { PrivacyScreen } from './PrivacyScreen';
 
-type Screen = 'auth' | 'home' | 'children' | 'drivers' | 'track' | 'referrals' | 'attendance' | 'invoice';
+type Screen = 'auth' | 'home' | 'children' | 'drivers' | 'track' | 'referrals' | 'attendance' | 'invoice' | 'more' | 'settings' | 'referral-earnings' | 'success-stories' | 'support' | 'privacy';
 
 type ChildRecord = ChildUpsertInput & { id: string };
 type InstitutionRecord = { id: string; name: string; address: string; type: string };
@@ -97,6 +102,17 @@ export default function App() {
   const [activeCall, setActiveCall] = useState<CallRecordData | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [callModalVisible, setCallModalVisible] = useState(false);
+
+  // More menu state
+  const [userEmail, setUserEmail] = useState('parent@ashwa.app');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [whatsAppNotifications, setWhatsAppNotifications] = useState(true);
+  const [parentReferralStats] = useState({
+    totalEarned: 200,
+    familiesJoined: 2,
+    invitesSent: 5,
+    potentialEarnings: 200,
+  });
 
   // Multi-Service Routing state
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
@@ -1049,6 +1065,61 @@ export default function App() {
     );
   }
 
+  if (screen === 'more') {
+    return (
+      <MoreMenu
+        onNavigate={setScreen}
+        onLogout={signOut}
+        userName={referralCode || 'Parent'}
+      />
+    );
+  }
+
+  if (screen === 'settings') {
+    return (
+      <SettingsScreen
+        userName={referralCode || 'Parent'}
+        userPhone="+91-98765-43210"
+        userEmail={userEmail}
+        isDarkMode={isDarkMode}
+        whatsAppNotifications={whatsAppNotifications}
+        onChangeName={(name) => {/* Update if profile stored */}}
+        onChangeEmail={setUserEmail}
+        onToggleDarkMode={setIsDarkMode}
+        onToggleWhatsApp={setWhatsAppNotifications}
+        onSave={() => setStatus('Settings saved!')}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'referral-earnings') {
+    return (
+      <ReferralEarningsScreen
+        totalEarned={parentReferralStats.totalEarned}
+        familiesJoined={parentReferralStats.familiesJoined}
+        invitesSent={parentReferralStats.invitesSent}
+        potentialEarnings={parentReferralStats.potentialEarnings}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'support') {
+    return (
+      <SupportScreen
+        onChat={() => setStatus('Starting chat...')}
+        onBack={() => setScreen('more')}
+      />
+    );
+  }
+
+  if (screen === 'privacy') {
+    return (
+      <PrivacyScreen onBack={() => setScreen('more')} />
+    );
+  }
+
   if (screen === 'track') {
     return (
       <SafeAreaView style={styles.page}>
@@ -1188,6 +1259,7 @@ export default function App() {
           onAttendanceHistory={() => setScreen('attendance')}
           onReferrals={() => setScreen('referrals')}
           onSettings={() => setScreen('children')}
+          onMore={() => setScreen('more')}
           onLogout={signOut}
           onTrackingOpen={() => setScreen('track')}
           onEmergency={() => setEmergencyModalVisible(true)}
