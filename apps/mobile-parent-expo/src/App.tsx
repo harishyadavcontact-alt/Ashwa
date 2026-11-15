@@ -638,6 +638,84 @@ export default function App() {
     console.log('[Analytics]', analyticsEntry);
   }
 
+  async function enrollInSelectedServices() {
+    if (!primaryChild) {
+      setStatus('Please create a child profile first.');
+      return;
+    }
+
+    setEnrollmentInProgress(true);
+    try {
+      // Get shared ride options for the first selected service
+      const firstService = selectedServices[0];
+      if (!firstService) {
+        setStatus('Please select at least one service.');
+        return;
+      }
+
+      // Load shared rides demo data
+      const sharedRidesData = await AsyncStorage.getItem('ashwa.shared_rides');
+      const rideOptions = sharedRidesData ? JSON.parse(sharedRidesData)[firstService.id] : null;
+
+      if (rideOptions) {
+        setSharedRideOptions(rideOptions);
+        // Stay on home to let user select ride option
+        setStatus('Select your ride option below, then confirm enrollment.');
+      } else {
+        // No shared rides available, just enroll in alone mode
+        confirmEnrollment(firstService.id, 'ALONE');
+      }
+    } catch (error: any) {
+      setStatus(`Enrollment error: ${error.message}`);
+    } finally {
+      setEnrollmentInProgress(false);
+    }
+  }
+
+  async function confirmEnrollment(serviceId: string, enrollmentType: 'ALONE' | 'SHARED_2' | 'SHARED_3PLUS' = 'ALONE') {
+    if (!primaryChild) return;
+
+    try {
+      const service = availableServices.find((s) => s.id === serviceId);
+      if (!service) throw new Error('Service not found');
+
+      // Determine price based on enrollment type
+      let pricePerMonth = 200; // Default to alone
+      if (enrollmentType === 'SHARED_2') pricePerMonth = 150;
+      if (enrollmentType === 'SHARED_3PLUS') pricePerMonth = 120;
+
+      // Create enrollment
+      const newEnrollment: ServiceEnrollment = {
+        id: `enrollment-${Date.now()}`,
+        serviceId,
+        parentId: 'parent_demo_id',
+        childId: primaryChild.id,
+        enrollmentType: enrollmentType === 'ALONE' ? 'ALONE' : 'SHARED',
+        status: 'ACTIVE',
+        enrolledAt: new Date().toISOString(),
+      };
+
+      // In production, this would call the backend API
+      // For demo, just add to local state
+      setEnrolledServices([...enrolledServices, newEnrollment]);
+
+      // Track analytics
+      const savings = enrollmentType === 'ALONE' ? 0 : (enrollmentType === 'SHARED_2' ? 50 : 80);
+      track('shared_ride_enrolled', {
+        serviceId,
+        enrollmentType,
+        savings,
+        price: pricePerMonth,
+      });
+
+      setStatus(`Enrolled in ${service.name} - ${enrollmentType === 'ALONE' ? 'Solo ride' : `Shared ride (save ₹${savings}!)`}`);
+      setSelectedServices([]);
+      setSharedRideOptions(null);
+    } catch (error: any) {
+      setStatus(`Error: ${error.message}`);
+    }
+  }
+
   async function callDriver() {
     if (!token || !assignment?.driver || !primaryChild) {
       setStatus('Cannot call: no driver assigned or child profile missing.');
@@ -1220,31 +1298,92 @@ export default function App() {
 
         {availableServices.length > 0 && !enrolledServices.length && (
           <View style={styles.cardInline}>
-            <Text style={styles.cardTitle}>Available services</Text>
-            <Text style={styles.metric}>Select from {availableServices.length} options to get started</Text>
-            {availableServices.map((service) => (
-              <TouchableOpacity
-                key={service.id}
-                onPress={() => {
-                  const isSelected = selectedServices.some((s) => s.id === service.id);
-                  if (isSelected) {
-                    setSelectedServices(selectedServices.filter((s) => s.id !== service.id));
-                  } else {
-                    setSelectedServices([...selectedServices, service]);
-                  }
-                }}
-                style={[styles.serviceOption, selectedServices.some((s) => s.id === service.id) && styles.serviceOptionSelected]}
-              >
-                <Text style={styles.metric}>{service.name} ({service.type})</Text>
-                <Text style={styles.metric}>{service.startTime} - {service.endTime}</Text>
-                <Text style={styles.cardTitle}>₹{service.pricePerMonth}/month</Text>
-              </TouchableOpacity>
-            ))}
-            {selectedServices.length > 0 && (
-              <View style={styles.actions}>
-                <Text style={styles.metric}>Total: ₹{selectedServices.reduce((sum, s) => sum + s.pricePerMonth, 0)}/month</Text>
-                <Button title="Enroll in services" onPress={() => setStatus('Service enrollment features coming soon')} />
-              </View>
+            {!sharedRideOptions ? (
+              <>
+                <Text style={styles.cardTitle}>Available services</Text>
+                <Text style={styles.metric}>Select from {availableServices.length} options to get started</Text>
+                {availableServices.map((service) => (
+                  <TouchableOpacity
+                    key={service.id}
+                    onPress={() => {
+                      const isSelected = selectedServices.some((s) => s.id === service.id);
+                      if (isSelected) {
+                        setSelectedServices(selectedServices.filter((s) => s.id !== service.id));
+                      } else {
+                        setSelectedServices([...selectedServices, service]);
+                      }
+                    }}
+                    style={[styles.serviceOption, selectedServices.some((s) => s.id === service.id) && styles.serviceOptionSelected]}
+                  >
+                    <Text style={styles.metric}>{service.name} ({service.type})</Text>
+                    <Text style={styles.metric}>{service.startTime} - {service.endTime}</Text>
+                    <Text style={styles.cardTitle}>₹{service.pricePerMonth}/month</Text>
+                  </TouchableOpacity>
+                ))}
+                {selectedServices.length > 0 && (
+                  <View style={styles.actions}>
+                    <Text style={styles.metric}>Total: ₹{selectedServices.reduce((sum, s) => sum + s.pricePerMonth, 0)}/month</Text>
+                    <Button title="Enroll in services" onPress={enrollInSelectedServices} disabled={enrollmentInProgress} />
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.cardTitle}>Choose your ride option</Text>
+                <Text style={styles.bodyDark}>Same route, same time = save money!</Text>
+
+                {/* Option 1: Alone */}
+                <TouchableOpacity
+                  onPress={() => setSelectedRideOption('ALONE')}
+                  style={[styles.rideOptionCard, selectedRideOption === 'ALONE' && styles.rideOptionSelected]}
+                >
+                  <Text style={styles.cardTitle}>Option 1: Alone</Text>
+                  <Text style={styles.metric}>Price: ₹200/month</Text>
+                  <Text style={styles.metric}>Seats: 1 seat reserved</Text>
+                </TouchableOpacity>
+
+                {/* Option 2: Shared with 1 family */}
+                {sharedRideOptions.shared2 && (
+                  <TouchableOpacity
+                    onPress={() => setSelectedRideOption('SHARED_2')}
+                    style={[styles.rideOptionCard, selectedRideOption === 'SHARED_2' && styles.rideOptionSelected]}
+                  >
+                    <Text style={styles.cardTitle}>Option 2: Share with 1 family (recommended ⭐)</Text>
+                    <Text style={styles.metric}>Price: ₹150/month (save ₹50!)</Text>
+                    <Text style={styles.metric}>Families: {sharedRideOptions.shared2.families.join(', ')}</Text>
+                    <Text style={styles.metric}>Same time, same route</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Option 3: Shared with 2+ families */}
+                {sharedRideOptions.shared3Plus && (
+                  <TouchableOpacity
+                    onPress={() => setSelectedRideOption('SHARED_3PLUS')}
+                    style={[styles.rideOptionCard, selectedRideOption === 'SHARED_3PLUS' && styles.rideOptionSelected]}
+                  >
+                    <Text style={styles.cardTitle}>Option 3: Share with {sharedRideOptions.shared3Plus.families.length} families</Text>
+                    <Text style={styles.metric}>Price: ₹120/month (save ₹80!)</Text>
+                    <Text style={styles.metric}>Families: {sharedRideOptions.shared3Plus.families.join(', ')}</Text>
+                  </TouchableOpacity>
+                )}
+
+                <View style={styles.actions}>
+                  <Button
+                    title={`Confirm ${selectedRideOption === 'ALONE' ? 'Solo' : 'Shared'} Enrollment`}
+                    onPress={() => {
+                      const service = selectedServices[0];
+                      if (service) confirmEnrollment(service.id, selectedRideOption);
+                    }}
+                  />
+                  <Button
+                    title="Change service"
+                    onPress={() => {
+                      setSharedRideOptions(null);
+                      setSelectedRideOption('ALONE');
+                    }}
+                  />
+                </View>
+              </>
             )}
           </View>
         )}
