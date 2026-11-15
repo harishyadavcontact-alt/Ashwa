@@ -7,6 +7,8 @@ import Login from '../components/Login';
 import { store } from '../data';
 import type { ChildRecord, EventRecord, MapStop, ParentProfile, PaymentRecord, Point, RouteSearchResult, TripRecord, VanLocation } from '../data/types';
 import { track } from '../lib/analytics';
+import { applyPendingReferral } from '../lib/referral';
+import { extras, todayKey } from '../data/extras';
 import { notifyNewUpdates } from '../lib/updates';
 import { parentMessage, timelineFor } from '../logic/alerts';
 import { etaMinutes, haversineMeters, isApproaching } from '../logic/eta';
@@ -24,6 +26,8 @@ interface ChildView {
   pickup: Point | null;
   drop: Point | null;
   payment: PaymentRecord | null;
+  absentToday: boolean;
+  driverPhone: string | null;
 }
 
 type Tab = 'map' | 'account' | 'add';
@@ -58,6 +62,8 @@ export default function ParentHome() {
       kids.map((c) => c.id),
       currentMonth(),
     );
+    const absentIds = await extras.absentChildIds(kids.map((c) => c.id), todayKey()).catch(() => [] as string[]);
+    const phones = await Promise.all(kids.map((c) => extras.driverPhoneForRoute(c.routeId).catch(() => null)));
     const next: ChildView[] = [];
     for (const child of kids) {
       const [driverName, trip, mapStops] = await Promise.all([
@@ -77,6 +83,8 @@ export default function ParentHome() {
         pickup: pickup?.point ?? null,
         drop: drop?.point ?? null,
         payment: payments.find((p) => p.childId === child.id) ?? null,
+        absentToday: absentIds.includes(child.id),
+        driverPhone: phones[kids.indexOf(child)] ?? null,
       });
     }
     setViews(next);
@@ -214,7 +222,7 @@ function ChildCard({
   onChanged: () => Promise<void>;
   onError: (m: string) => void;
 }) {
-  const { child, trip, events, van, pickup, drop, payment } = view;
+  const { child, trip, events, van, pickup, drop, payment, absentToday, driverPhone } = view;
   const mine = events.filter((e) => e.childId === child.id).map((e) => e.eventType);
   const boarded = mine.includes('CHILD_BOARDED');
   const dropped = mine.includes('CHILD_DROPPED');
@@ -223,7 +231,9 @@ function ChildCard({
   const minutes = distance !== null ? Math.max(1, Math.round(etaMinutes(distance))) : null;
   const approaching = distance !== null && isApproaching(distance);
 
-  const status = !trip
+  const status = absentToday
+    ? { text: 'Not coming today', tone: 'warn' }
+    : !trip
     ? { text: 'No run', tone: '' }
     : dropped
       ? { text: 'Home', tone: 'ok' }
@@ -250,6 +260,11 @@ function ChildCard({
             dropLabel: drop?.label || 'drop',
           })}
         </p>
+      )}
+      {driverPhone && (
+        <a className="btn small ghost" style={{ marginTop: 10 }} href={`https://wa.me/91${driverPhone}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+          WhatsApp driver
+        </a>
       )}
       <div className="row between" style={{ marginTop: 10 }}>
         <span className="muted">₹{child.monthlyFee} / month</span>
@@ -419,7 +434,25 @@ function AddChild({
 
       {step === 'vans' && (
         <main className="screen">
-          {results.length === 0 && <p className="notice">No van with free seats for this school yet.</p>}
+          {results.length === 0 && (
+            <div className="stack">
+              <p className="notice">No van with free seats for this school yet.</p>
+              <button
+                type="button"
+                className="btn primary full"
+                onClick={async () => {
+                  try {
+                    await extras.joinWaitlist({ firstName: firstName || 'Child', school, pickup: await locate() });
+                    setMessage('Saved. We will tell you when a van is free.');
+                  } catch (e) {
+                    setMessage(e instanceof Error ? e.message : 'Could not save');
+                  }
+                }}
+              >
+                Tell me when a van is free
+              </button>
+            </div>
+          )}
           <ul className="list">
             {results.map((r) => (
               <li key={r.routeId} className="row between">
@@ -469,6 +502,10 @@ function AddChild({
 function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSignedOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [isDriver, setIsDriver] = useState<boolean | null>(null);
+  const [stats, setStats] = useState<{ opens: number; joins: number } | null>(null);
+  useEffect(() => {
+    extras.myReferralStats().then(setStats).catch(() => {});
+  }, []);
   const navigate = useNavigate();
   useEffect(() => {
     store.getDriver(parent.id).then((d) => setIsDriver(!!d));
@@ -489,6 +526,16 @@ function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSigned
           Invite a parent
         </a>
       </section>
+
+      {stats && (
+        <section className="card">
+          <p className="muted">
+            Opened your link: <strong>{stats.opens}</strong> · Joined: <strong>{stats.joins}</strong>
+          </p>
+        </section>
+      )}
+
+      <PushToggle />
 
       {isDriver !== null && (
         <button type="button" className="btn ghost full" onClick={() => navigate('/driver')}>
@@ -570,6 +617,7 @@ function ParentSetup({
         referredBy: referredBy || null,
         consentAt: new Date().toISOString(),
       });
+      await applyPendingReferral();
       track('parent_profile_created', { via: referredBy ? 'referral' : 'direct' });
       track('consent_given', { role: 'parent' });
       onSaved(p);
@@ -609,4 +657,39 @@ function locate(): Promise<Point> {
 
 function formatDistance(m: number): string {
   return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+function urlBase64ToBytes(b64: string): BufferSource {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out as BufferSource;
+}
+
+// Web push: needs a VAPID public key in the build (VITE_VAPID_PUBLIC_KEY). Hidden until it is set.
+function PushToggle() {
+  const [state, setState] = useState<'idle' | 'on' | 'blocked' | 'error'>('idle');
+  const key = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  if (!key || !('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  return (
+    <button
+      type="button"
+      className="btn ghost full"
+      onClick={async () => {
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') return setState('blocked');
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToBytes(key) });
+          await extras.savePushSubscription(sub.toJSON());
+          setState('on');
+        } catch {
+          setState('error');
+        }
+      }}
+    >
+      {state === 'on' ? 'Alerts are on' : state === 'blocked' ? 'Alerts blocked in this browser' : state === 'error' ? 'Could not turn on alerts' : 'Turn on alerts'}
+    </button>
+  );
 }

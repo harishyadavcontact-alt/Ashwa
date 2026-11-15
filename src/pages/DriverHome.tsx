@@ -8,6 +8,8 @@ import { RouteView } from '../components/RouteView';
 import { store } from '../data';
 import type { DriverProfile, Point, RouteRecord, VerificationStatus } from '../data/types';
 import { track } from '../lib/analytics';
+import { extras, type BackupRecord } from '../data/extras';
+import { applyPendingReferral } from '../lib/referral';
 
 export default function DriverHome() {
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
@@ -18,6 +20,9 @@ export default function DriverHome() {
   const [joining, setJoining] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [hasParent, setHasParent] = useState(false);
+  const [week, setWeek] = useState<{ runs: number; families: number } | null>(null);
+  const [backups, setBackups] = useState<BackupRecord[]>([]);
+  const [refStats, setRefStats] = useState<{ opens: number; joins: number } | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,6 +34,10 @@ export default function DriverHome() {
     setDriver(d);
     setRoutes(rs);
     setHasParent(!!p);
+    extras.myWeekStats().then(setWeek).catch(() => {});
+    extras.openBackups().then(setBackups).catch(() => setBackups([]));
+    extras.myReferralStats().then(setRefStats).catch(() => {});
+    extras.syncMyPhone().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -78,6 +87,47 @@ export default function DriverHome() {
 
       <main className="screen stack">
         {message && <p className="error">{message}</p>}
+
+        {week && (
+          <section className="card">
+            <div className="row between">
+              <span>This week</span>
+              <span className="big-num">{week.runs} runs</span>
+            </div>
+            <p className="muted">{week.families} families on your routes</p>
+            {refStats && (
+              <p className="muted">Drivers you invited: opened {refStats.opens} · joined {refStats.joins}</p>
+            )}
+          </section>
+        )}
+
+        {backups.length > 0 && (
+          <section className="card stack">
+            <strong>Backup needed nearby</strong>
+            {backups.map((b) => (
+              <div key={b.id} className="row between">
+                <div className="grow">
+                  <div>{b.schoolName || b.routeName}</div>
+                  <div className="muted">{b.day} · {b.ownerName}</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn small primary"
+                  onClick={async () => {
+                    try {
+                      await extras.coverBackup(b.id);
+                      setBackups((xs) => xs.filter((x) => x.id !== b.id));
+                    } catch (e) {
+                      setMessage(e instanceof Error ? e.message : 'Could not cover');
+                    }
+                  }}
+                >
+                  I can cover
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
 
         {routes.map((r) => (
           <button key={r.id} type="button" className="card route-card" onClick={() => setOpen(r)}>
@@ -285,6 +335,7 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
     if (!consent) return setError('Tick the box to continue');
     try {
       await store.saveDriver({ id: userId, name: name.trim(), vanSeats: 8, referredBy: referredBy || null });
+      await applyPendingReferral();
       track('driver_profile_created', { via: referredBy ? 'referral' : 'direct' });
       track('consent_given', { role: 'driver' });
       onSaved();

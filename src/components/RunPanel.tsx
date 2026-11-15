@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { extras, INCIDENT_KINDS, todayKey } from '../data/extras';
 import { store } from '../data';
 import type { ChildRecord, EventRecord, RouteRecord, RouteStop, TripRecord } from '../data/types';
 import { track } from '../lib/analytics';
@@ -27,11 +28,19 @@ export function nextLabel(e: EventType): string {
   }
 }
 
+function tomorrowKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return todayKey(d);
+}
+
 export function RunPanel({ route, stops, children, driverId }: { route: RouteRecord; stops: RouteStop[]; children: ChildRecord[]; driverId: string }) {
   const [trip, setTrip] = useState<TripRecord | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
+  const [absentIds, setAbsentIds] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [gps, setGps] = useState(true);
+  const [reporting, setReporting] = useState(false);
   const lastPush = useRef(0);
 
   useEffect(() => {
@@ -40,6 +49,17 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
       setEvents(t ? await store.listEvents(t.id) : []);
     });
   }, [route.id]);
+
+  useEffect(() => {
+    if (children.length === 0) return;
+    extras
+      .absentChildIds(
+        children.map((c) => c.id),
+        todayKey(),
+      )
+      .then(setAbsentIds)
+      .catch(() => {});
+  }, [children]);
 
   // Keep the screen on during a run where supported.
   useEffect(() => {
@@ -71,11 +91,14 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
     return () => navigator.geolocation.clearWatch(id);
   }, [trip]);
 
+  // Children who are coming today. Absent children are left out of the run.
+  const riding = children.filter((c) => !absentIds.includes(c.id));
+
   async function start(tripType: TripType) {
     setMessage(null);
     try {
       const t = await store.startTrip(route.id, driverId, tripType, crypto.randomUUID());
-      track('trip_started', { type: tripType, customers: children.length });
+      track('trip_started', { type: tripType, customers: riding.length });
       setTrip(t);
       setEvents([]);
       lastPush.current = 0;
@@ -84,12 +107,22 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
     }
   }
 
+  async function toggleAbsent(childId: string) {
+    const nowAbsent = !absentIds.includes(childId);
+    setAbsentIds((ids) => (nowAbsent ? [...ids, childId] : ids.filter((x) => x !== childId)));
+    try {
+      await extras.setAbsent(childId, todayKey(), nowAbsent);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not save');
+    }
+  }
+
   const tripType: TripType = trip?.tripType ?? 'MORNING';
-  const run = trip ? buildRunStops(route, stops, children, tripType) : [];
+  const run = trip ? buildRunStops(route, stops, riding, tripType) : [];
   const logicTrip: TripLike = { tripType, stops: run, events: events.map((e) => ({ childId: e.childId, eventType: e.eventType })) };
   const next = trip ? getNextTripAction(logicTrip) : null;
   const nextEvent: EventType | null = next?.allowedEvents[0] ?? null;
-  const nextChild = next?.childId ? children.find((c) => c.id === next.childId) : null;
+  const nextChild = next?.childId ? riding.find((c) => c.id === next.childId) : null;
   const done = run.filter((r) => next?.nextStop && r.sequenceIndex < next.nextStop.sequenceIndex).length;
 
   async function tap() {
@@ -106,17 +139,83 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
     }
   }
 
+  async function report(kind: string) {
+    setReporting(false);
+    try {
+      await extras.reportIncident(route.id, kind, '');
+      track('stop_tapped', { event: 'PROBLEM' });
+      setMessage('Sent. Ashwa has been told.');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not send');
+    }
+  }
+
+  const problemButton = (
+    <div className="stack">
+      {!reporting ? (
+        <button type="button" className="btn ghost full" onClick={() => setReporting(true)}>
+          Report a problem
+        </button>
+      ) : (
+        <div className="seg" style={{ flexWrap: 'wrap' }}>
+          {INCIDENT_KINDS.map((k) => (
+            <button key={k} type="button" onClick={() => report(k)}>
+              {k}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (!trip) {
     return (
       <div className="stack">
-        <button type="button" className="btn primary big full" onClick={() => start('MORNING')} disabled={children.length === 0}>
+        {children.length > 0 && (
+          <section>
+            <div className="row between">
+              <strong>Today</strong>
+              <span className="muted">
+                {riding.length} coming · {absentIds.length} absent
+              </span>
+            </div>
+            <ul className="list">
+              {children.map((c) => {
+                const absent = absentIds.includes(c.id);
+                return (
+                  <li key={c.id} className="row between">
+                    <span className={absent ? 'muted' : ''}>{c.firstName}</span>
+                    <button type="button" className={`btn small ${absent ? 'primary' : 'ghost'}`} onClick={() => toggleAbsent(c.id)}>
+                      {absent ? 'Absent' : 'Coming'}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+        <button type="button" className="btn primary big full" onClick={() => start('MORNING')} disabled={riding.length === 0}>
           Morning run
         </button>
-        <button type="button" className="btn ghost big full" onClick={() => start('AFTERNOON')} disabled={children.length === 0}>
+        <button type="button" className="btn ghost big full" onClick={() => start('AFTERNOON')} disabled={riding.length === 0}>
           Afternoon run
         </button>
         {children.length === 0 && <p className="muted">Add customers first.</p>}
-        {message && <p className="error">{message}</p>}
+        <button
+          type="button"
+          className="btn ghost full"
+          onClick={async () => {
+            try {
+              await extras.requestBackup(route.id, tomorrowKey(), '');
+              setMessage('Backup asked for tomorrow. Verified drivers nearby will see it.');
+            } catch (e) {
+              setMessage(e instanceof Error ? e.message : 'Could not ask');
+            }
+          }}
+        >
+          Need a backup tomorrow?
+        </button>
+        {message && <p className="notice">{message}</p>}
       </div>
     );
   }
@@ -148,14 +247,18 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
 
       {!gps && <p className="notice">Location is off. Allow it and keep this screen on.</p>}
       {message && <p className="error">{message}</p>}
-      <button type="button" className="btn ghost full" onClick={async () => {
-        await store.endTrip(trip.id);
-        setTrip(null);
-        setEvents([]);
-      }}>
+      {problemButton}
+      <button
+        type="button"
+        className="btn ghost full"
+        onClick={async () => {
+          await store.endTrip(trip.id);
+          setTrip(null);
+          setEvents([]);
+        }}
+      >
         End run
       </button>
     </div>
   );
 }
-

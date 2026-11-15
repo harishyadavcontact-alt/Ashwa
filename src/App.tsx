@@ -4,8 +4,13 @@ import Entry from './pages/Entry';
 import DriverHome from './pages/DriverHome';
 import ParentHome from './pages/ParentHome';
 import Privacy from './pages/Privacy';
+import { useEffect } from 'react';
+import { captureReferral } from './lib/referral';
 
 export default function App() {
+  useEffect(() => {
+    captureReferral();
+  }, []);
   return (
     <BrowserRouter>
       <Routes>

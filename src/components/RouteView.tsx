@@ -350,6 +350,18 @@ function CustomersTab({
             </a>
           </div>
         )}
+        <button
+          type="button"
+          className="btn ghost full"
+          onClick={() => {
+            const free = Math.max(0, route.vanSeats - children.length);
+            const text = `${free} seat${free === 1 ? '' : 's'} free on ${route.name} (${route.schoolName}). Join: ${inviteLink}`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+            track('invite_shared', { role: 'driver', kind: 'seats' });
+          }}
+        >
+          Share free seats
+        </button>
         <CustomerList children={children} onChanged={onChanged} onError={onError} />
       </div>
     );

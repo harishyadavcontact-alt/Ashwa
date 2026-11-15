@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: { importScripts: ['push-handler.js'] },
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'Ashwa',
