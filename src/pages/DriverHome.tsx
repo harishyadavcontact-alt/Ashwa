@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Login from '../components/Login';
 import { PointInput } from '../components/PointInput';
 import { RouteView } from '../components/RouteView';
 import { store } from '../data';
-import type { DriverProfile, Point, RouteRecord } from '../data/types';
+import type { DriverProfile, Point, RouteRecord, VerificationStatus } from '../data/types';
+import { track } from '../lib/analytics';
 
 export default function DriverHome() {
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
@@ -48,6 +50,7 @@ export default function DriverHome() {
   return (
     <main className="shell">
       <h1>Hi {driver?.name}</h1>
+      {driver && driver.verificationStatus !== 'VERIFIED' && <VerificationBanner status={driver.verificationStatus} />}
       {message && (
         <p role="alert" className="error">
           {message}
@@ -97,6 +100,7 @@ function CreateRoute({ ownerId, seats, onCreated, onError }: { ownerId: string; 
         start: { ...start, label: start.label || 'Van base' },
         vanSeats: seats,
       });
+      track('route_created', { seats: seats });
       onCreated(route);
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Could not create the route');
@@ -141,7 +145,9 @@ function JoinRoute({ onJoined, onError }: { onJoined: (r: RouteRecord) => void; 
         disabled={code.trim().length < 6}
         onClick={async () => {
           try {
-            onJoined(await store.joinRouteByCode(code.trim()));
+            const joined = await store.joinRouteByCode(code.trim());
+            track('route_joined');
+            onJoined(joined);
           } catch (e) {
             onError(e instanceof Error ? e.message : 'Could not join');
           }
@@ -156,13 +162,17 @@ function JoinRoute({ onJoined, onError }: { onJoined: (r: RouteRecord) => void; 
 function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void }) {
   const [name, setName] = useState('');
   const [seats, setSeats] = useState(8);
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     setError(null);
     if (!name.trim()) return setError('Enter your name');
+    if (!consent) return setError('Please tick the consent box to continue.');
     try {
       await store.saveDriver({ id: userId, name: name.trim(), vanSeats: seats });
+      track('driver_profile_created');
+      track('consent_given', { role: 'driver' });
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save');
@@ -180,6 +190,13 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
         Seats in the van
         <input type="number" min={1} max={15} value={seats} onChange={(e) => setSeats(Number(e.target.value))} />
       </label>
+      <label className="check consent">
+        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+        <span>
+          I will only use Ashwa to run my van for the families who choose me. I will keep their children’s details private and I
+          will not share them. <Link to="/privacy">Read the privacy notice</Link>.
+        </span>
+      </label>
       <button type="button" onClick={save}>
         Continue
       </button>
@@ -189,5 +206,19 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
         </p>
       )}
     </main>
+  );
+}
+
+function VerificationBanner({ status }: { status: VerificationStatus }) {
+  const text =
+    status === 'PENDING'
+      ? 'Waiting for Ashwa verification. You can set up your route and invite your own families now. Parents who search for a van will see you once you are verified.'
+      : status === 'REJECTED'
+        ? 'Verification was not approved. Please contact the Ashwa team.'
+        : 'Your listing is paused. Please contact the Ashwa team.';
+  return (
+    <p role="status" className="status">
+      {text}
+    </p>
   );
 }

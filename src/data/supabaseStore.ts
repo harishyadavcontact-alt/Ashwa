@@ -16,6 +16,8 @@ import type {
   RouteStop,
   TripRecord,
   VanLocation,
+  VerificationStatus,
+  AnalyticsName,
 } from './types';
 
 // Pilot store: Supabase Postgres with row-level security. Needs supabase/migrations/0001_pilot_schema.sql applied.
@@ -32,7 +34,12 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data;
 }
 
-const mapDriver = (r: Row): DriverProfile => ({ id: r.id as string, name: r.name as string, vanSeats: r.van_seats as number });
+const mapDriver = (r: Row): DriverProfile => ({
+  id: r.id as string,
+  name: r.name as string,
+  vanSeats: r.van_seats as number,
+  verificationStatus: r.verification_status as VerificationStatus,
+});
 
 const mapParent = (r: Row): ParentProfile => ({
   id: r.id as string,
@@ -40,6 +47,7 @@ const mapParent = (r: Row): ParentProfile => ({
   phone: r.phone as string,
   referralCode: r.referral_code as string,
   referredBy: (r.referred_by as string | null) ?? null,
+  consentAt: (r.consent_at as string | null) ?? null,
 });
 
 const mapRoute = (r: Row): RouteRecord => ({
@@ -132,8 +140,41 @@ export class SupabaseStore implements AppStore {
     return r ? mapDriver(r as Row) : null;
   }
 
-  async saveDriver(d: DriverProfile) {
+  async saveDriver(d: Omit<DriverProfile, 'verificationStatus'>) {
+    // Status is deliberately not sent: the database trigger rejects status changes from drivers.
     check(await client().from('drivers').upsert({ id: d.id, name: d.name, van_seats: d.vanSeats }));
+  }
+
+  async isAdmin() {
+    return (check(await client().rpc('is_admin')) as boolean) === true;
+  }
+
+  async listDriversByStatus(status: VerificationStatus) {
+    const rows = check(await client().rpc('admin_drivers', { p_status: status })) as Row[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      vanSeats: r.van_seats as number,
+      verificationStatus: r.verification_status as VerificationStatus,
+    }));
+  }
+
+  async setDriverStatus(driverId: string, status: VerificationStatus) {
+    check(await client().rpc('set_driver_status', { p_driver: driverId, p_status: status }));
+  }
+
+  async eventCounts(days: number) {
+    const rows = check(await client().rpc('admin_event_counts', { p_days: days })) as Row[];
+    return rows.map((r) => ({ name: r.name as string, n: Number(r.n) }));
+  }
+
+  async deleteMyData() {
+    check(await client().rpc('delete_my_data'));
+  }
+
+  async track(name: AnalyticsName, props: Record<string, string | number> = {}) {
+    // user_id is filled in by the database from the signed-in user. Props must hold counts and enums only.
+    check(await client().from('analytics_events').insert({ name, props }));
   }
 
   async getParent(id: string) {
@@ -148,11 +189,12 @@ export class SupabaseStore implements AppStore {
       phone: input.phone,
       referral_code: input.referralCode ?? makeReferralCode(),
       referred_by: input.referredBy,
+      consent_at: input.consentAt,
     };
     // Keep the referral code and referrer once set.
     const existing = await this.getParent(input.id);
     const payload = existing
-      ? { id: input.id, name: input.name, phone: input.phone }
+      ? { id: input.id, name: input.name, phone: input.phone, consent_at: input.consentAt ?? existing.consentAt }
       : row;
     const saved = check(
       await client().from('parents').upsert(payload).select('*').single(),

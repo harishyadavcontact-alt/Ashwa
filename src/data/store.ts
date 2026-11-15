@@ -1,6 +1,7 @@
 import type { TripType } from '../logic/tripProgression';
 import type {
   ChildRecord,
+  AnalyticsName,
   Direction,
   DriverProfile,
   EventRecord,
@@ -12,6 +13,7 @@ import type {
   RouteStop,
   TripRecord,
   VanLocation,
+  VerificationStatus,
 } from './types';
 
 // One interface, two implementations: LocalStore (demo) and SupabaseStore (pilot).
@@ -27,10 +29,22 @@ export interface AppStore {
 
   // Profiles
   getDriver(id: string): Promise<DriverProfile | null>;
-  saveDriver(driver: DriverProfile): Promise<void>;
   getParent(id: string): Promise<ParentProfile | null>;
   saveParent(parent: Omit<ParentProfile, 'referralCode'> & { referralCode?: string }): Promise<ParentProfile>;
   getDriverName(id: string): Promise<string>;
+  saveDriver(driver: Omit<DriverProfile, 'verificationStatus'>): Promise<void>; // status is never set by the driver
+
+  // Admin (founder only)
+  isAdmin(): Promise<boolean>;
+  listDriversByStatus(status: VerificationStatus): Promise<DriverProfile[]>;
+  setDriverStatus(driverId: string, status: VerificationStatus): Promise<void>;
+  eventCounts(days: number): Promise<{ name: string; n: number }[]>;
+
+  // Privacy
+  deleteMyData(): Promise<void>;
+
+  // Analytics (never throws to the UI; see src/lib/analytics.ts)
+  track(name: AnalyticsName, props?: Record<string, string | number>): Promise<void>;
   routeDriverName(routeId: string): Promise<string>;
 
   // Routes (driver side)

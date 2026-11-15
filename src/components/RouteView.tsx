@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { store } from '../data';
+import { track } from '../lib/analytics';
 import type { ChildRecord, Direction, Point, RouteRecord, RouteStop } from '../data/types';
 import { orderedStops, phoneKey } from '../logic/routes';
 import { FeesPanel } from './FeesPanel';
@@ -68,7 +69,7 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
             <h2>Invite parents</h2>
             <p>Parents tap this, sign in, and add their child to your van.</p>
             <p>
-              <a href={`https://wa.me/?text=${parentShare}`} target="_blank" rel="noreferrer">
+              <a href={`https://wa.me/?text=${parentShare}`} target="_blank" rel="noreferrer" onClick={() => track('invite_shared', { role: 'driver' })}>
                 Share on WhatsApp
               </a>
             </p>
@@ -254,6 +255,7 @@ function Customers({
         pickup,
         drop: sameDrop ? null : drop,
       });
+      track('customer_added', { hasDrop: sameDrop ? 0 : 1 });
       setAdded(child);
       setFirstName('');
       setPhone('');

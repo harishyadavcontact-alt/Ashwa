@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { store } from '../data';
+import { track } from '../lib/analytics';
 import type { ChildRecord, PaymentRecord } from '../data/types';
 import { currentMonth, feeState, formatMonth } from '../logic/routes';
 
@@ -29,6 +30,11 @@ export function FeesPanel({ children }: { children: ChildRecord[] }) {
     return p?.status === 'PAID' ? sum + p.amount : sum;
   }, 0);
   const paidCount = children.filter((c) => byChild.get(c.id)?.status === 'PAID').length;
+
+  async function markPaidTracked(input: Parameters<typeof store.markPaid>[0]) {
+    await store.markPaid(input);
+    track('payment_marked', { method: input.method });
+  }
 
   async function run(action: () => Promise<void>) {
     setMessage(null);
@@ -83,7 +89,7 @@ export function FeesPanel({ children }: { children: ChildRecord[] }) {
                   </select>
                   <button
                     type="button"
-                    onClick={() => run(() => store.markPaid({ childId: c.id, month, amount: c.monthlyFee, method, reference: '' }))}
+                    onClick={() => run(() => markPaidTracked({ childId: c.id, month, amount: c.monthlyFee, method, reference: '' }))}
                   >
                     Mark paid
                   </button>
@@ -93,7 +99,7 @@ export function FeesPanel({ children }: { children: ChildRecord[] }) {
                 <div className="row">
                   <button
                     type="button"
-                    onClick={() => run(() => store.markPaid({ childId: c.id, month, amount: p.amount, method: p.method, reference: p.reference }))}
+                    onClick={() => run(() => markPaidTracked({ childId: c.id, month, amount: p.amount, method: p.method, reference: p.reference }))}
                   >
                     Confirm received
                   </button>

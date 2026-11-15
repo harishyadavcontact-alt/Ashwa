@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Consent } from '../components/Consent';
+import { track } from '../lib/analytics';
+import { parentMessage, timelineFor, unseenFor } from '../logic/alerts';
 import Login from '../components/Login';
 import { PointInput } from '../components/PointInput';
 import { store } from '../data';
@@ -139,11 +143,17 @@ export default function ParentHome() {
             href={`https://wa.me/?text=${encodeURIComponent(`I track my child's school van live on Ashwa. It's free: ${inviteLink}`)}`}
             target="_blank"
             rel="noreferrer"
+            onClick={() => track('invite_shared', { role: 'parent' })}
           >
             Share on WhatsApp
           </a>
         </p>
       </section>
+
+      <DeleteData />
+      <p className="muted footer">
+        <Link to="/privacy">Privacy notice</Link>
+      </p>
     </main>
   );
 }
@@ -165,6 +175,7 @@ function ParentSetup({
   onSaved: (p: ParentProfile) => void;
 }) {
   const [name, setName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
@@ -172,7 +183,16 @@ function ParentSetup({
     if (!name.trim()) return setError('Enter your name');
     if (!phone) return setError('This sign-in has no phone number. Sign out and sign in with your mobile.');
     try {
-      const p = await store.saveParent({ id: userId, name: name.trim(), phone, referredBy: referredBy || null });
+      if (!consent) return setError('Please tick the consent box to continue.');
+      const p = await store.saveParent({
+        id: userId,
+        name: name.trim(),
+        phone,
+        referredBy: referredBy || null,
+        consentAt: new Date().toISOString(),
+      });
+      track('parent_profile_created', { via: referredBy ? 'referral' : 'direct' });
+      track('consent_given', { role: 'parent' });
       onSaved(p);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save');
@@ -187,6 +207,7 @@ function ParentSetup({
         Your name
         <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
       </label>
+      <Consent checked={consent} onChange={setConsent} />
       <button type="button" onClick={save}>
         Continue
       </button>
@@ -244,6 +265,14 @@ function ChildCard({ view, onChanged, onError }: { view: ChildView; onChanged: (
         {child.schoolName} · {driverName} · ₹{child.monthlyFee}/month
       </p>
       <p className="next">{headline}</p>
+      <Timeline
+        events={events}
+        childId={child.id}
+        firstName={child.firstName}
+        schoolName={child.schoolName}
+        pickupLabel={pickup?.label || 'pickup point'}
+        dropLabel={drop?.label || 'drop point'}
+      />
       {approaching && minutes !== null && (
         <p role="status" className="alert">
           Van is about {minutes} min away.
@@ -309,6 +338,7 @@ function FeeBox({
           setBusy(true);
           try {
             await store.reportPayment({ childId: child.id, month, amount: child.monthlyFee, method, reference: reference.trim() });
+            track('payment_reported', { method });
             await onChanged();
           } catch (e) {
             onError(e instanceof Error ? e.message : 'Could not save');
@@ -356,6 +386,7 @@ function AddToRoute({
           setBusy(true);
           try {
             await store.enrolChild({ routeId, parentId, parentPhone: phone, firstName, pickup });
+            track('child_added', { via: 'invite' });
             onDone();
           } catch (e) {
             onError(e instanceof Error ? e.message : 'Could not add your child');
@@ -394,7 +425,9 @@ function FindVan({
     }
     setBusy(true);
     try {
-      setResults(await store.searchRoutes(school, pickup));
+      const found = await store.searchRoutes(school, pickup);
+      track('van_search', { results: found.length });
+      setResults(found);
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Search failed');
     } finally {
@@ -410,6 +443,7 @@ function FindVan({
     setBusy(true);
     try {
       await store.enrolChild({ routeId: r.routeId, parentId, parentPhone: phone, firstName, pickup });
+      track('child_added', { via: 'search' });
       setResults(null);
       setSchool('');
       setFirstName('');
@@ -462,4 +496,136 @@ function FindVan({
 
 function formatDistance(m: number): string {
   return m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+// Timeline of what happened on the van for this child. New items notify once, then are marked seen.
+function Timeline({
+  events,
+  childId,
+  firstName,
+  schoolName,
+  pickupLabel,
+  dropLabel,
+}: {
+  events: EventRecord[];
+  childId: string;
+  firstName: string;
+  schoolName: string;
+  pickupLabel: string;
+  dropLabel: string;
+}) {
+  const storageKey = `ashwa.seen.${childId}`;
+  const [seen, setSeen] = useState<Set<string> | null>(null);
+
+  // First visit on this device: mark what already happened as seen, without notifying.
+  useEffect(() => {
+    const stored = loadSeen(storageKey);
+    if (stored) {
+      setSeen(stored);
+    } else {
+      const all = new Set(timelineFor(events, childId).map((e) => e.id));
+      saveSeen(storageKey, all);
+      setSeen(all);
+    }
+    // only on mount or child change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  const items = timelineFor(events, childId);
+  const fresh = seen ? unseenFor(events, childId, seen) : [];
+  const freshKey = fresh.map((e) => e.id).join(',');
+
+  useEffect(() => {
+    if (!seen || fresh.length === 0) return;
+    if ('Notification' in window && Notification.permission === 'granted') {
+      for (const e of fresh.slice(0, 3)) {
+        new Notification(parentMessage(e.eventType, { firstName, schoolName, pickupLabel, dropLabel }));
+      }
+    }
+    const next = new Set([...seen, ...fresh.map((e) => e.id)]);
+    saveSeen(storageKey, next);
+    setSeen(next);
+    // runs when new events arrive
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freshKey]);
+
+  if (items.length === 0) return null;
+  return (
+    <ol className="timeline updates" aria-label="Updates for today">
+      {items.map((e) => (
+        <li key={e.id}>
+          <span className="muted">{new Date(e.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>{' '}
+          {parentMessage(e.eventType, { firstName, schoolName, pickupLabel, dropLabel })}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function loadSeen(key: string): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? new Set(JSON.parse(raw) as string[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSeen(key: string, ids: Set<string>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify([...ids].slice(-500)));
+  } catch {
+    // Storage blocked: the same updates may notify again on reload. Not a data problem.
+  }
+}
+
+// Parents can erase their personal data. Children stay on the driver's list, anonymised, so fee records stay.
+function DeleteData() {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function erase() {
+    setBusy(true);
+    setError(null);
+    try {
+      await store.deleteMyData();
+      await store.auth.signOut();
+      window.location.href = '/';
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete your data');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card">
+      <h2>Your data</h2>
+      {!confirming ? (
+        <button type="button" onClick={() => setConfirming(true)}>
+          Delete my data
+        </button>
+      ) : (
+        <>
+          <p>
+            This removes your name and mobile number from Ashwa. Your child stays on your driver’s list, shown as “Deleted”, so the
+            fee records stay correct. This can’t be undone.
+          </p>
+          <div className="row">
+            <button type="button" onClick={erase} disabled={busy}>
+              Yes, delete
+            </button>
+            <button type="button" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+    </section>
+  );
 }

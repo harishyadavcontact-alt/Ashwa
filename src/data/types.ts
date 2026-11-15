@@ -4,6 +4,24 @@ import type { EventType, TripType } from '../logic/tripProgression';
 export type Direction = 'TO_SCHOOL' | 'TO_HOME';
 
 export type PaymentStatus = 'REPORTED' | 'PAID';
+export type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
+
+// Event names for analytics. Never put a child's name, phone or address in the properties.
+export type AnalyticsName =
+  | 'parent_profile_created'
+  | 'consent_given'
+  | 'driver_profile_created'
+  | 'route_created'
+  | 'route_joined'
+  | 'customer_added'
+  | 'invite_shared'
+  | 'child_added'
+  | 'van_search'
+  | 'trip_started'
+  | 'stop_tapped'
+  | 'payment_reported'
+  | 'payment_marked'
+  | 'data_deleted';
 
 export interface Point {
   lat: number;
@@ -15,6 +33,7 @@ export interface DriverProfile {
   id: string;
   name: string;
   vanSeats: number;
+  verificationStatus: VerificationStatus;
 }
 
 export interface ParentProfile {
@@ -23,6 +42,7 @@ export interface ParentProfile {
   phone: string;
   referralCode: string;
   referredBy: string | null;
+  consentAt: string | null;
 }
 
 // One van, one school, one start point. A route is what a replacement driver "follows".

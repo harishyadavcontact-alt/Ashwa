@@ -3,6 +3,7 @@ import { haversineMeters } from '../logic/eta';
 import type { TripType } from '../logic/tripProgression';
 import type { AppStore } from './store';
 import type {
+  AnalyticsName,
   ChildRecord,
   Direction,
   DriverProfile,
@@ -15,6 +16,7 @@ import type {
   RouteStop,
   TripRecord,
   VanLocation,
+  VerificationStatus,
 } from './types';
 
 // Demo store: everything lives in this browser's localStorage. For trying flows only, never for real families.
@@ -24,6 +26,9 @@ const KEY = 'ashwa.local.v2';
 const USER_KEY = 'ashwa.local.user';
 const DEMO_CODE = '000000';
 const SAME_STOP_METRES = 30;
+// Demo admin: sign in with this number to see the admin page locally. Real admins are set in the database.
+const DEMO_ADMIN_PHONE = '9999999999';
+const ANALYTICS_CAP = 1000;
 
 interface State {
   drivers: Record<string, DriverProfile>;
@@ -36,6 +41,7 @@ interface State {
   events: EventRecord[];
   locations: Record<string, VanLocation>;
   payments: PaymentRecord[];
+  analytics: { userId: string; name: string; props: Record<string, string | number>; createdAt: string }[];
 }
 
 const empty: State = {
@@ -49,6 +55,7 @@ const empty: State = {
   events: [],
   locations: {},
   payments: [],
+  analytics: [],
 };
 
 function read(): State {
@@ -138,9 +145,66 @@ export class LocalStore implements AppStore {
     return read().drivers[id] ?? null;
   }
 
-  async saveDriver(driver: DriverProfile) {
+  async saveDriver(driver: Omit<DriverProfile, 'verificationStatus'>) {
     const s = read();
-    s.drivers[driver.id] = driver;
+    const existing = s.drivers[driver.id];
+    s.drivers[driver.id] = {
+      id: driver.id,
+      name: driver.name,
+      vanSeats: driver.vanSeats,
+      verificationStatus: existing?.verificationStatus ?? 'PENDING',
+    };
+    write(s);
+  }
+
+  async isAdmin() {
+    return readUser()?.phone === DEMO_ADMIN_PHONE;
+  }
+
+  async listDriversByStatus(status: VerificationStatus) {
+    if (!(await this.isAdmin())) throw new Error('Admins only');
+    return Object.values(read().drivers).filter((d) => d.verificationStatus === status);
+  }
+
+  async setDriverStatus(driverId: string, status: VerificationStatus) {
+    if (!(await this.isAdmin())) throw new Error('Admins only');
+    const s = read();
+    const d = s.drivers[driverId];
+    if (d) d.verificationStatus = status;
+    write(s);
+  }
+
+  async eventCounts(days: number) {
+    if (!(await this.isAdmin())) throw new Error('Admins only');
+    const since = Date.now() - days * 86_400_000;
+    const counts = new Map<string, number>();
+    for (const e of read().analytics) {
+      if (Date.parse(e.createdAt) >= since) counts.set(e.name, (counts.get(e.name) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
+  }
+
+  async deleteMyData() {
+    const userId = readUser()?.id;
+    if (!userId) return;
+    const s = read();
+    for (const c of s.children) {
+      if (c.parentId === userId) {
+        c.parentId = null;
+        c.parentPhone = '';
+        c.firstName = 'Deleted';
+      }
+    }
+    delete s.parents[userId];
+    s.analytics = s.analytics.filter((a) => a.userId !== userId);
+    write(s);
+  }
+
+  async track(name: AnalyticsName, props: Record<string, string | number> = {}) {
+    const userId = readUser()?.id ?? 'anonymous';
+    const s = read();
+    s.analytics.push({ userId, name, props, createdAt: new Date().toISOString() });
+    if (s.analytics.length > ANALYTICS_CAP) s.analytics = s.analytics.slice(-ANALYTICS_CAP);
     write(s);
   }
 
@@ -157,6 +221,7 @@ export class LocalStore implements AppStore {
       phone: input.phone,
       referralCode: existing?.referralCode ?? input.referralCode ?? makeReferralCode(),
       referredBy: existing?.referredBy ?? input.referredBy ?? null,
+      consentAt: existing?.consentAt ?? input.consentAt ?? null,
     };
     s.parents[input.id] = saved;
     write(s);
@@ -305,6 +370,7 @@ export class LocalStore implements AppStore {
     const results: RouteSearchResult[] = [];
     for (const route of s.routes) {
       if (!schoolMatches(route.schoolName, schoolName)) continue;
+      if (s.drivers[route.ownerId]?.verificationStatus !== 'VERIFIED') continue;
       const stops = s.stops.filter((x) => x.routeId === route.id);
       const kids = s.children.filter((c) => c.routeId === route.id).length;
       const left = seatsLeft(route.vanSeats, kids);

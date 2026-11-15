@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { store } from '../data';
+import { track } from '../lib/analytics';
 import type { ChildRecord, EventRecord, RouteRecord, RouteStop, TripRecord } from '../data/types';
 import { buildRunStops } from '../logic/routes';
 import { getNextTripAction, validateTripEvent, type EventType, type TripLike, type TripType } from '../logic/tripProgression';
@@ -88,6 +89,7 @@ export function RunPanel({
       setTrip(t);
       setEvents([]);
       lastPush.current = 0;
+      track('trip_started', { type: tripType, customers: children.length });
       setMessage(`${tripType === 'MORNING' ? 'Morning' : 'Afternoon'} run started.`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Could not start the run');
@@ -114,6 +116,7 @@ export function RunPanel({
     }
     try {
       await store.addEvent({ id: crypto.randomUUID(), tripId: trip.id, childId: next.childId, eventType: nextEvent });
+      track('stop_tapped', { event: nextEvent });
       setEvents(await store.listEvents(trip.id));
       setMessage(null);
     } catch (e) {
