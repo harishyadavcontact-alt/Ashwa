@@ -8,6 +8,22 @@ import { getNextTripAction, validateTripEvent, type EventType, type TripLike, ty
 
 const LOCATION_PUSH_MS = 10_000;
 
+// WhatsApp alert messages for parents at each trip milestone
+function getWhatsAppAlertText(eventType: EventType, childName: string): string | null {
+  switch (eventType) {
+    case 'CHILD_BOARDED':
+      return `✓ Picked up ${childName}. On the way to school.`;
+    case 'DRIVER_AT_SCHOOL':
+      return `✓ ${childName} reached school.`;
+    case 'DRIVER_LEFT_SCHOOL':
+      return `✓ Left school. ${childName} will be home soon.`;
+    case 'CHILD_DROPPED':
+      return `✓ ${childName} dropped home. See you tomorrow!`;
+    default:
+      return null;
+  }
+}
+
 // Button text for the next thing the driver does. Short, in the driver's words.
 export function nextLabel(e: EventType): string {
   switch (e) {
@@ -134,6 +150,15 @@ export function RunPanel({ route, stops, children, driverId }: { route: RouteRec
       track('stop_tapped', { event: nextEvent });
       setEvents(await store.listEvents(trip.id));
       setMessage(null);
+
+      // Send WhatsApp alert to parent
+      const child = riding.find((c) => c.id === next.childId);
+      if (child) {
+        const alertMsg = getWhatsAppAlertText(nextEvent, child.firstName);
+        if (alertMsg) {
+          extras.sendWhatsAppAlert(child.parentPhone, alertMsg, child.firstName).catch(() => {});
+        }
+      }
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Try again');
     }

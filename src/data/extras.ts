@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { phoneKey } from '../logic/routes';
+import { track } from '../lib/analytics';
 import { store } from './index';
 import type { Point } from './types';
 
@@ -46,6 +47,9 @@ export interface Extras {
   // Drivers: a parent on the route can message the driver on WhatsApp
   syncMyPhone(): Promise<void>;
   driverPhoneForRoute(routeId: string): Promise<string | null>;
+
+  // WhatsApp alerts to parents on trip events
+  sendWhatsAppAlert(parentPhone: string, message: string, childName: string): Promise<void>;
 
   // Waitlist for new parents
   joinWaitlist(input: { firstName: string; school: string; pickup: Point }): Promise<void>;
@@ -344,6 +348,12 @@ class LocalExtras implements Extras {
       { stage: 'Problems reported', n: s.incidents.filter((i) => inWindow(i.createdAt)).length },
     ];
   }
+
+  async sendWhatsAppAlert(parentPhone: string, message: string, childName: string) {
+    // Demo mode: just log it. Production: call WhatsApp API (Twilio or custom).
+    console.log(`[WhatsApp to ${parentPhone}] ${message}`);
+    track('whatsapp_sent', { child: childName });
+  }
 }
 
 // ---------- Supabase implementation ----------
@@ -468,6 +478,13 @@ class SupabaseExtras implements Extras {
   async funnel(days: number) {
     const rows = check(await client().rpc('admin_funnel', { p_days: days })) as Row[];
     return rows.map((r) => ({ stage: r.stage as string, n: Number(r.n) }));
+  }
+
+  async sendWhatsAppAlert(parentPhone: string, message: string, childName: string) {
+    // Production: call Supabase Edge Function to send via Twilio or custom WhatsApp API.
+    // For now: log it. Real implementation requires Supabase Function + Twilio/WhatsApp API.
+    console.log(`[WhatsApp to ${parentPhone}] ${message}`);
+    track('whatsapp_sent', { child: childName });
   }
 }
 

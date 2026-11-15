@@ -21,7 +21,14 @@ export type AnalyticsName =
   | 'stop_tapped'
   | 'payment_reported'
   | 'payment_marked'
-  | 'data_deleted';
+  | 'data_deleted'
+  | 'loan_applied'
+  | 'loan_approved'
+  | 'job_posted'
+  | 'job_hired'
+  | 'driver_referral_earned'
+  | 'parent_referral_earned'
+  | 'whatsapp_sent';
 
 export interface Point {
   lat: number;
@@ -138,4 +145,55 @@ export interface RouteSearchResult {
   driverName: string;
   seatsLeft: number;
   distanceM: number;
+}
+
+// --- Ownership Ladder Features ---
+
+// Driver tier (Level 0-2) and tier data
+export type DriverTier = 'DRIVER' | 'OWNER' | 'FLEET';
+
+// Loan: driver borrows to buy a van, auto-paid from trip revenue
+export interface LoanRecord {
+  id: string;
+  driverId: string;
+  amountRequested: number;
+  downPayment: number;
+  monthlyPayment: number;
+  status: 'PENDING' | 'APPROVED' | 'ACTIVE' | 'PAID_OFF';
+  autoDeduct: boolean;
+  createdAt: string;
+  approvedAt: string | null;
+  vanTitle: string;
+  nextPaymentDue: string;
+}
+
+// Job: driver posts a job to hire another driver
+export interface JobRecord {
+  id: string;
+  ownerId: string;
+  routeId: string;
+  title: string;
+  payPerMonth: number;
+  status: 'OPEN' | 'HIRED' | 'FILLED';
+  hiredDriverId: string | null;
+  createdAt: string;
+  filledAt: string | null;
+}
+
+// Success story: driver's journey published to motivate others
+export interface SuccessStory {
+  id: string;
+  driverId: string;
+  title: string;
+  content: string;
+  metrics: {
+    startedFamilies?: number;
+    currentFamilies?: number;
+    driversInvited?: number;
+    monthlyEarnings?: number;
+    routesOwned?: number;
+  };
+  published: boolean;
+  publishedAt: string | null;
+  createdAt: string;
 }

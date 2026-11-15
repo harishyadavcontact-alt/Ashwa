@@ -260,6 +260,7 @@ function ChildCard({ view, focused, onFocus }: { view: ChildView; focused: boole
 }
 
 // Add a child in three steps: name and school, pick a van, tap home on the map.
+// When referred, skip directly to pinning home (route is preset).
 function AddChild({
   parentId,
   phone,
@@ -274,18 +275,33 @@ function AddChild({
   onCancel: () => void;
 }) {
   const [step, setStep] = useState<'details' | 'vans' | 'pin'>(presetRouteId ? 'pin' : 'details');
+  const [defaultPick, setDefaultPick] = useState<Point | null>(null);
+
+  // When referral route is preset, auto-fill location as default.
+  useEffect(() => {
+    if (presetRouteId && step === 'pin') {
+      locate().then(setDefaultPick);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetRouteId]);
   const [schools, setSchools] = useState<string[]>([]);
   useEffect(() => {
     store.knownSchools().then(setSchools).catch(() => setSchools([]));
   }, []);
   const suggestions = schools.filter((n) => school.trim() && n.toLowerCase().includes(school.trim().toLowerCase()) && n.toLowerCase() !== school.trim().toLowerCase()).slice(0, 5);
-  const [firstName, setFirstName] = useState('');
+  const [firstName, setFirstName] = useState(presetRouteId ? 'Child' : '');
   const [school, setSchool] = useState('');
   const [results, setResults] = useState<RouteSearchResult[]>([]);
   const [routeId, setRouteId] = useState<string | null>(presetRouteId);
-  const [pick, setPick] = useState<Point | null>(null);
+  const [pick, setPick] = useState<Point | null>(defaultPick);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // When defaultPick is set (auto-location), update pick.
+  useEffect(() => {
+    if (defaultPick && !pick) setPick(defaultPick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultPick]);
 
   async function search() {
     if (!firstName.trim() || !school.trim()) return setMessage('Enter your child’s name and school.');
@@ -449,10 +465,28 @@ function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSigned
       </section>
 
       {stats && (
-        <section className="card">
-          <p className="muted">
-            Opened your link: <strong>{stats.opens}</strong> · Joined: <strong>{stats.joins}</strong>
-          </p>
+        <section className="card stack">
+          <strong>Your Referral Impact</strong>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{stats.opens}</div>
+              <p className="muted" style={{ fontSize: 12 }}>Invites opened</p>
+            </div>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#1e8e4e' }}>{stats.joins}</div>
+              <p className="muted" style={{ fontSize: 12 }}>Families joined</p>
+            </div>
+          </div>
+          {stats.joins > 0 && (
+            <div style={{ marginTop: 10, padding: 10, background: '#fff8dc', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                Earn ₹200 per family that joins and pays 3 months
+              </div>
+              <div style={{ fontSize: 13, color: '#1e8e4e', marginTop: 4, fontWeight: 700 }}>
+                Potential: ₹{stats.joins * 200}/month (if all stay)
+              </div>
+            </div>
+          )}
         </section>
       )}
 

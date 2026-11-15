@@ -95,11 +95,44 @@ export default function DriverHome() {
               <span className="big-num">{week.runs} runs</span>
             </div>
             <p className="muted">{week.families} families on your routes</p>
-            {refStats && (
-              <p className="muted">Drivers you invited: opened {refStats.opens} · joined {refStats.joins}</p>
+          </section>
+        )}
+
+        {refStats && (
+          <section className="card">
+            <strong>Network Impact</strong>
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#1e8e4e' }}>{refStats.opens}</div>
+                <div className="muted" style={{ fontSize: 12 }}>Invites sent</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#1e8e4e' }}>{refStats.joins}</div>
+                <div className="muted" style={{ fontSize: 12 }}>Drivers joined</div>
+              </div>
+            </div>
+            {refStats.joins > 0 && (
+              <div style={{ marginTop: 12, padding: 10, background: '#fff8dc', borderRadius: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>
+                  You're saving <span style={{ color: '#1e8e4e' }}>~{refStats.joins * 15} min/week</span> network-wide
+                </div>
+              </div>
             )}
           </section>
         )}
+
+        <section className="card">
+          <strong>Next Level: Owner 🚐</strong>
+          <p className="muted">Own your van. Earn ₹150k/month. Manage multiple routes.</p>
+          <div style={{ marginTop: 12 }}>
+            <button type="button" className="btn primary full" onClick={() => setMessage('Loan feature coming soon. We\'re preparing the application process.')}>
+              Get a Loan
+            </button>
+            <button type="button" className="btn ghost full" style={{ marginTop: 8 }} onClick={() => setMessage('Post a job to hire a driver. You keep 15% of their route earnings.')}>
+              Hire a Driver
+            </button>
+          </div>
+        </section>
 
         {backups.length > 0 && (
           <section className="card stack">
