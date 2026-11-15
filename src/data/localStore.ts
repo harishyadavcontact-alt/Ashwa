@@ -283,11 +283,12 @@ export class LocalStore implements AppStore {
     const kids = s.children.filter((c) => c.routeId === routeId);
     const at = (stopId: string) => kids.filter((c) => c.toSchoolStopId === stopId || c.toHomeStopId === stopId);
     const out: MapStop[] = [];
-    if (team) out.push({ kind: 'START', direction: null, order: 0, point: route.start, childCount: 0, names: [] });
-    out.push({ kind: 'SCHOOL', direction: null, order: 0, point: route.school, childCount: 0, names: [] });
+    if (team) out.push({ id: null, kind: 'START', direction: null, order: 0, point: route.start, childCount: 0, names: [] });
+    out.push({ id: null, kind: 'SCHOOL', direction: null, order: 0, point: route.school, childCount: 0, names: [] });
     for (const st of s.stops.filter((x) => x.routeId === routeId)) {
       const here = at(st.id);
       out.push({
+        id: st.id,
         kind: 'STOP',
         direction: st.direction,
         order: st.order,

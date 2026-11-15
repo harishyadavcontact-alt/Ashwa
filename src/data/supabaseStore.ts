@@ -256,6 +256,7 @@ export class SupabaseStore implements AppStore {
   async routeMap(routeId: string): Promise<MapStop[]> {
     const rows = check(await client().rpc('route_map', { p_route_id: routeId })) as Row[];
     return rows.map((r) => ({
+      id: (r.id as string | null) ?? null,
       kind: r.kind as MapStop['kind'],
       direction: (r.direction as Direction | null) ?? null,
       order: (r.stop_order as number) ?? 0,
@@ -385,8 +386,8 @@ export class SupabaseStore implements AppStore {
   }
 
   async knownSchools() {
-    const rows = check(await client().from('routes').select('school_name'));
-    return [...new Set((rows as Row[]).map((r) => r.school_name as string))].sort();
+    const rows = check(await client().rpc('known_schools')) as Row[];
+    return [...new Set(rows.map((r) => r.school_name as string))].sort();
   }
 
   async enrolChild(input: { routeId: string; parentId: string; parentPhone: string; firstName: string; pickup: Point }) {

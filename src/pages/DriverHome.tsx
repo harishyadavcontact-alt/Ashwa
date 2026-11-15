@@ -87,6 +87,17 @@ export default function DriverHome() {
 
         {routes.length === 0 && <p className="muted">No routes yet.</p>}
 
+        <button
+          type="button"
+          className="btn ghost full"
+          onClick={async () => {
+            await store.auth.signOut();
+            setUserId(null);
+          }}
+        >
+          Sign out
+        </button>
+
         <button type="button" className="btn primary full" onClick={() => setCreating(true)}>
           <SharedIcon name="plus" /> New route
         </button>

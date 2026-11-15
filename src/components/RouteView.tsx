@@ -34,6 +34,7 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
   const [form, setForm] = useState<CustomerForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [showCode, setShowCode] = useState(false);
+  const [openStop, setOpenStop] = useState<MapStop | null>(null);
 
   async function load() {
     const [m, s, c] = await Promise.all([store.routeMap(route.id), store.listStops(route.id), store.listChildrenForRoute(route.id)]);
@@ -93,7 +94,7 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
       </header>
 
       <div className="stage">
-        <MapView stops={map} pick={pickPoint} pickMode={picking} onPick={setPickPoint} />
+        <MapView stops={map} pick={pickPoint} pickMode={picking} onPick={setPickPoint} onStopTap={picking ? undefined : setOpenStop} />
 
         <section className="sheet" aria-label="Route">
           {picking && (
@@ -112,7 +113,11 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
             </div>
           )}
 
-          {!picking && (
+          {!picking && openStop && (
+            <StopSheet stop={openStop} children={children} driverName={driverName} inviteLink={inviteLink} onClose={() => setOpenStop(null)} />
+          )}
+
+          {!picking && !openStop && (
             <>
               <nav className="seg" aria-label="Sections" style={{ marginBottom: 12 }}>
                 {(['run', 'customers', 'stops', 'fees'] as Tab[]).map((t) => (
@@ -389,5 +394,59 @@ function CustomerRow({ child, onChanged, onError }: { child: ChildRecord; onChan
         style={{ width: 96, height: 40 }}
       />
     </li>
+  );
+}
+
+// Families at one pin. Joined families are linked to their account; the rest get an invite.
+function StopSheet({
+  stop,
+  children,
+  driverName,
+  inviteLink,
+  onClose,
+}: {
+  stop: MapStop;
+  children: ChildRecord[];
+  driverName: string;
+  inviteLink: string;
+  onClose: () => void;
+}) {
+  const here = stop.id ? children.filter((c) => c.toSchoolStopId === stop.id || c.toHomeStopId === stop.id) : [];
+  return (
+    <div className="stack">
+      <div className="row between">
+        <strong>{stop.point.label || 'Stop'}</strong>
+        <button type="button" className="btn small ghost" onClick={onClose}>
+          Done
+        </button>
+      </div>
+      {here.length === 0 && <p className="muted">No families at this pin yet.</p>}
+      <ul className="list">
+        {here.map((c) => {
+          const text = `Hi, it's ${driverName}, your school van. Join here: ${inviteLink}`;
+          return (
+            <li key={c.id} className="row between">
+              <div className="grow">
+                <strong>{c.firstName}</strong>
+                <div className="muted">•••• {c.parentPhone.slice(-4)}</div>
+              </div>
+              {c.parentId ? (
+                <span className="chip ok">Joined</span>
+              ) : (
+                <a
+                  className="btn small primary"
+                  href={`https://wa.me/91${c.parentPhone}?text=${encodeURIComponent(text)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => track('invite_shared', { role: 'driver' })}
+                >
+                  Invite
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

@@ -119,6 +119,7 @@ export interface PaymentRecord {
 
 // One point on the map. START is shown to the team only. SCHOOL and STOP are shown to everyone on the route.
 export interface MapStop {
+  id: string | null; // null for the school and start
   kind: 'START' | 'SCHOOL' | 'STOP';
   direction: Direction | null;
   order: number;

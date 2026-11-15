@@ -338,6 +338,11 @@ function AddChild({
   onCancel: () => void;
 }) {
   const [step, setStep] = useState<'details' | 'vans' | 'pin'>(presetRouteId ? 'pin' : 'details');
+  const [schools, setSchools] = useState<string[]>([]);
+  useEffect(() => {
+    store.knownSchools().then(setSchools).catch(() => setSchools([]));
+  }, []);
+  const suggestions = schools.filter((n) => school.trim() && n.toLowerCase().includes(school.trim().toLowerCase()) && n.toLowerCase() !== school.trim().toLowerCase()).slice(0, 5);
   const [firstName, setFirstName] = useState('');
   const [school, setSchool] = useState('');
   const [results, setResults] = useState<RouteSearchResult[]>([]);
@@ -396,6 +401,15 @@ function AddChild({
             <span>School</span>
             <input value={school} onChange={(e) => setSchool(e.target.value)} placeholder="e.g. Sunrise School" />
           </label>
+          {suggestions.length > 0 && (
+            <div className="seg">
+              {suggestions.map((n) => (
+                <button key={n} type="button" onClick={() => setSchool(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
           {message && <p className="error">{message}</p>}
           <button type="button" className="btn primary full" onClick={search} disabled={busy}>
             Find vans

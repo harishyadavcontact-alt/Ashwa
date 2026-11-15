@@ -27,10 +27,13 @@ interface Props {
   pickMode?: boolean;
   onPick?: (p: Point) => void;
   highlightFirst?: boolean;
+  onStopTap?: (stop: MapStop) => void;
 }
 
 // Route line runs start → stops (to school) → school. Pins: school square, van bubble, stops and families.
-export function MapView({ stops, van, pick, pickMode = false, onPick, highlightFirst = true }: Props) {
+export function MapView({ stops, van, pick, pickMode = false, onPick, highlightFirst = true, onStopTap }: Props) {
+  const tapRef = useRef(onStopTap);
+  tapRef.current = onStopTap;
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const staticMarkers = useRef<maplibregl.Marker[]>([]);
@@ -107,6 +110,13 @@ export function MapView({ stops, van, pick, pickMode = false, onPick, highlightF
       } else {
         el.className = 'pin stop';
         el.textContent = s.childCount > 0 ? String(s.childCount) : '';
+      }
+      if (s.kind === 'STOP') {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          tapRef.current?.(s);
+        });
       }
       staticMarkers.current.push(new maplibregl.Marker({ element: el }).setLngLat([s.point.lng, s.point.lat]).addTo(m));
     });
