@@ -60,6 +60,31 @@ enum EventType {
   CHILD_DROPPED
 }
 
+enum ServiceType {
+  SCHOOL
+  TUITION
+  DANCE
+  SPORTS
+  OTHER
+}
+
+enum ServiceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ServiceEnrollmentStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum SharedRideStatus {
+  FORMING
+  ACTIVE
+  COMPLETED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -80,6 +105,7 @@ model ParentProfile {
   referredReferrals ParentReferral[] @relation("ReferredReferrals")
   earningsAsReferrer ParentReferralEarnings[] @relation("EarningsAsReferrer")
   earningsAsReferred ParentReferralEarnings[] @relation("EarningsAsReferred")
+  serviceEnrollments ServiceEnrollment[]
 }
 model DriverProfile {
   userId String @id
@@ -99,6 +125,8 @@ model DriverProfile {
   assignments Assignment[]
   routes RouteTemplate[]
   locationPings LocationPing[]
+  services Service[]
+  sharedRideGroups SharedRideGroup[]
 }
 model Vehicle {
   id String @id @default(cuid())
@@ -139,6 +167,7 @@ model Child {
   tripStops TripStop[]
   events TripEvent[]
   paymentRecords PaymentRecord[]
+  serviceEnrollments ServiceEnrollment[]
 }
 model DriverInstitution {
   driverId String
@@ -265,3 +294,58 @@ model ParentReferralEarnings {
   referredParent ParentProfile @relation("EarningsAsReferred", fields:[referredParentId], references:[userId])
   @@unique([referralId, month, year])
 }
+
+// Multi-Service Routing Models
+model Service {
+  id String @id @default(cuid())
+  driverId String
+  name String
+  type ServiceType
+  startTime String // HH:MM
+  endTime String // HH:MM
+  location Json // { lat: number, lng: number }
+  daysOfWeek String // JSON array of 0-6
+  capacity Int
+  pricePerMonth Int
+  status ServiceStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+
+  driver DriverProfile @relation(fields:[driverId], references:[userId], onDelete: Cascade)
+  enrollments ServiceEnrollment[]
+  sharedRideGroups SharedRideGroup[]
+}
+
+model ServiceEnrollment {
+  id String @id @default(cuid())
+  serviceId String
+  parentId String
+  childId String
+  enrollmentType String @default("ALONE") // ALONE, SHARED
+  sharedGroupId String?
+  pricePerMonth Int
+  status ServiceEnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime @default(now())
+
+  service Service @relation(fields:[serviceId], references:[id], onDelete: Cascade)
+  parent ParentProfile @relation(fields:[parentId], references:[userId], onDelete: Cascade)
+  child Child @relation(fields:[childId], references:[id], onDelete: Cascade)
+}
+
+model SharedRideGroup {
+  id String @id @default(cuid())
+  serviceId String
+  driverId String
+  parentIds String // JSON array of parent IDs
+  childIds String // JSON array of child IDs
+  startDate DateTime
+  status SharedRideStatus @default(FORMING)
+  pricePerParent Int
+  seatsUsed Int
+  pickupCoords Json? // Array of { lat, lng, address }
+  dropCoords Json? // Array of { lat, lng, address }
+  createdAt DateTime @default(now())
+
+  service Service @relation(fields:[serviceId], references:[id], onDelete: Cascade)
+  driver DriverProfile @relation(fields:[driverId], references:[userId], onDelete: Cascade)
+}
+

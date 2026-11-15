@@ -1653,6 +1653,7 @@ export default function App() {
           <Button title="End trip" onPress={endTrip} />
           <Button title="Inbox" onPress={() => setScreen('inbox')} />
           <Button title="Driver Verification" onPress={() => { loadVerification(); setScreen('verification'); }} color={colors.accent} />
+          <Button title="Admin: Pending Verifications" onPress={() => { loadAdminVerifications(); setScreen('admin-verification'); }} color="#d32f2f" />
           <Button title="My Services" onPress={() => { loadServices(); setScreen('services'); }} color={colors.accent} />
           <Button title="Trip History" onPress={() => { loadTripHistory(); setScreen('trip-history'); }} color={colors.accent} />
           <Button title="Success Stories" onPress={() => setScreen('success-stories')} color={colors.accent} />

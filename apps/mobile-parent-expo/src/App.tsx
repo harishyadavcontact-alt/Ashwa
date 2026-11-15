@@ -11,7 +11,7 @@ import type {
   Service,
   ServiceEnrollment,
 } from '@ashwa/shared';
-import { sendEmergencyAlert, initiateCall, endCall, getActiveCall } from '@ashwa/shared';
+import { sendEmergencyAlert, initiateCall, endCall, getActiveCall, getSubstituteNotifications } from '@ashwa/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
@@ -1225,6 +1225,31 @@ export default function App() {
           <Text style={styles.metric}>{tripState?.nextAction?.label || 'Waiting for driver action'}</Text>
           <Text style={styles.metric}>{children.length} child profile(s) on file</Text>
         </View>
+
+        {(() => {
+          const substituteNotifications = getSubstituteNotifications();
+          const parentNotifications = substituteNotifications.filter(n =>
+            n.type === 'PARENT_SUBSTITUTE_NOTIFICATION' || n.type === 'REFUND_NOTIFICATION'
+          );
+
+          if (parentNotifications.length > 0) {
+            return (
+              <View style={styles.cardInline}>
+                <Text style={styles.cardTitle}>Driver Update</Text>
+                {parentNotifications.map((notif, idx) => (
+                  <View key={idx} style={{ marginBottom: 12 }}>
+                    <Text style={styles.metric}>{notif.message}</Text>
+                    <Text style={{ fontSize: 11, color: colors.muted, marginTop: 4 }}>
+                      {new Date(notif.timestamp).toLocaleTimeString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         {!children.length ? (
           <EmptyState title="Start with the child record" body="Without that, driver discovery and route matching are still guesses." />
         ) : null}
