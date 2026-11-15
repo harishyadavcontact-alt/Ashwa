@@ -222,3 +222,12 @@ The value chain in `01` Table B (L0–L8) against each persona. ● built, ◐ p
 10. **Fleet mode and the owner persona** (phase 2, after C10).
 
 **Decisions the founder must make:** M5 (money rule), M6 (share design), M13 (brand), and whether to keep polling or move to Realtime (M3).
+
+---
+
+## Decisions (2026-11-16, founder)
+
+- **English first.** Kannada is out of the pilot for now.
+- **Money rule.** The driver sets each price and marks each family paid (or not). The driver sees how many have paid and who hasn't. Parents see their fee and whether it is paid. Parents don't report payments, and money is never collected in the app. This replaces M5 and M8.
+- **Parent-to-driver loop is in.** A parent can ask their driver to join from their account (WhatsApp, with their referral link).
+- **Look.** Simple and minimal. White and ink, with yellow only for the van and small highlights. Not a brand system; the bar is "not tacky".

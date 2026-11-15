@@ -12,10 +12,9 @@ import { extras, todayKey } from '../data/extras';
 import { notifyNewUpdates } from '../lib/updates';
 import { parentMessage, timelineFor } from '../logic/alerts';
 import { etaMinutes, haversineMeters, isApproaching } from '../logic/eta';
-import { currentMonth, feeState, formatMonth } from '../logic/routes';
+import { currentMonth, feeState } from '../logic/routes';
 
 const POLL_MS = 10_000;
-const METHODS = ['UPI', 'Cash', 'Bank'];
 
 interface ChildView {
   child: ChildRecord;
@@ -176,8 +175,6 @@ export default function ParentHome() {
                 view={v}
                 focused={v.child.routeId === focusRouteId}
                 onFocus={() => setFocusRouteId(v.child.routeId)}
-                onChanged={() => load(userId!)}
-                onError={setMessage}
               />
             ))}
             {views.length > 0 && (
@@ -209,19 +206,7 @@ export default function ParentHome() {
   );
 }
 
-function ChildCard({
-  view,
-  focused,
-  onFocus,
-  onChanged,
-  onError,
-}: {
-  view: ChildView;
-  focused: boolean;
-  onFocus: () => void;
-  onChanged: () => Promise<void>;
-  onError: (m: string) => void;
-}) {
+function ChildCard({ view, focused, onFocus }: { view: ChildView; focused: boolean; onFocus: () => void }) {
   const { child, trip, events, van, pickup, drop, payment, absentToday, driverPhone } = view;
   const mine = events.filter((e) => e.childId === child.id).map((e) => e.eventType);
   const boarded = mine.includes('CHILD_BOARDED');
@@ -268,73 +253,9 @@ function ChildCard({
       )}
       <div className="row between" style={{ marginTop: 10 }}>
         <span className="muted">₹{child.monthlyFee} / month</span>
-        {fee === 'PAID' && <span className="chip ok">Paid</span>}
-        {fee === 'REPORTED' && <span className="chip warn">Sent to driver</span>}
-        {fee === 'DUE' && <PayButton child={child} onChanged={onChanged} onError={onError} />}
+        {fee === 'PAID' ? <span className="chip ok">Paid this month</span> : <span className="chip">Due this month</span>}
       </div>
     </article>
-  );
-}
-
-function PayButton({ child, onChanged, onError }: { child: ChildRecord; onChanged: () => Promise<void>; onError: (m: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [method, setMethod] = useState(METHODS[0]);
-  const [reference, setReference] = useState('');
-  const [busy, setBusy] = useState(false);
-  const month = currentMonth();
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        className="btn primary small"
-        disabled={child.monthlyFee <= 0}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        Pay ₹{child.monthlyFee}
-      </button>
-    );
-  }
-
-  return (
-    <div className="stack" style={{ width: '100%' }} onClick={(e) => e.stopPropagation()}>
-      <div className="seg">
-        {METHODS.map((m) => (
-          <button key={m} type="button" aria-pressed={method === m} onClick={() => setMethod(m)}>
-            {m}
-          </button>
-        ))}
-      </div>
-      {method !== 'Cash' && <input placeholder="UPI ref (optional)" value={reference} onChange={(e) => setReference(e.target.value)} />}
-      <div className="row">
-        <button
-          type="button"
-          className="btn primary grow"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await store.reportPayment({ childId: child.id, month, amount: child.monthlyFee, method, reference: reference.trim() });
-              track('payment_reported', { method });
-              setOpen(false);
-              await onChanged();
-            } catch (e) {
-              onError(e instanceof Error ? e.message : 'Could not save');
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          I paid {formatMonth(month)}
-        </button>
-        <button type="button" className="btn ghost" onClick={() => setOpen(false)}>
-          Cancel
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -543,6 +464,8 @@ function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSigned
         </button>
       )}
 
+      <AskDriver parentCode={parent.referralCode} parentName={parent.name} />
+
       <section className="card">
         <Link to="/privacy">Privacy</Link>
       </section>
@@ -691,5 +614,41 @@ function PushToggle() {
     >
       {state === 'on' ? 'Alerts are on' : state === 'blocked' ? 'Alerts blocked in this browser' : state === 'error' ? 'Could not turn on alerts' : 'Turn on alerts'}
     </button>
+  );
+}
+
+// Parent asks their driver to join Ashwa. Opens WhatsApp to the driver with the parent's referral link.
+function AskDriver({ parentCode, parentName }: { parentCode: string; parentName: string }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [sent, setSent] = useState(false);
+  const digits = phone.replace(/\D/g, '').slice(-10);
+  if (sent) {
+    return (
+      <section className="card">
+        <p className="muted">Sent. Thank you.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="card stack">
+      <strong>Ask your driver to join</strong>
+      <input placeholder="Driver's name" value={name} onChange={(e) => setName(e.target.value)} />
+      <input type="tel" inputMode="tel" placeholder="Driver's mobile" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <button
+        type="button"
+        className="btn ghost full"
+        disabled={!name.trim() || digits.length !== 10}
+        onClick={() => {
+          const link = window.location.origin + '/driver?ref=' + parentCode;
+          const text = 'Hi ' + name.trim() + ", it's " + parentName + ". Please join Ashwa so I can track my child's van. It takes one minute: " + link;
+          window.open('https://wa.me/91' + digits + '?text=' + encodeURIComponent(text), '_blank', 'noopener');
+          track('invite_shared', { role: 'parent', kind: 'driver_request' });
+          setSent(true);
+        }}
+      >
+        Send on WhatsApp
+      </button>
+    </section>
   );
 }

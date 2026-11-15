@@ -303,3 +303,12 @@ select {
 .code { font-family: ui-monospace, Consolas, monospace; letter-spacing: 2px; }
 .footer-links { display: flex; gap: 16px; justify-content: center; padding: 16px 0; }
 .counts td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+
+/* Minimal look: white and ink. Yellow stays for the van and small highlights. */
+.topbar { background: #fff; border-bottom: 1px solid var(--line); }
+.auth { background: var(--bg); }
+.brand-mark { color: var(--ink); }
+.btn.primary { background: var(--ink); color: #fff; }
+.pin.mine { background: var(--ink); color: #fff; }
+.chip.brand { background: #fff3c4; color: var(--ink); }
+.tabbar button[aria-current='page'] { box-shadow: inset 0 2px 0 var(--ink); }
