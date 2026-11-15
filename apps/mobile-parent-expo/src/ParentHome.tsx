@@ -205,6 +205,12 @@ export function ParentHome({
 
   return (
     <SafeAreaView style={styles.page}>
+      {/* Info Tip */}
+      <InfoTip
+        tip="Live location updates every 10s"
+        visible={showInfoTip}
+      />
+
       {/* Call Status Modal */}
       {activeCall && (
         <Modal
@@ -259,24 +265,24 @@ export function ParentHome({
 
       {/* Main Map (80% of screen) */}
       <View style={styles.mapContainer}>
-        {trip?.status === 'ACTIVE' ? (
+        {trip?.status === 'ACTIVE' || demoMode ? (
           <MapView
             ref={mapRef}
             style={styles.map}
             initialRegion={{
-              latitude: driverLoc.latitude,
-              longitude: driverLoc.longitude,
+              latitude: demoMode ? demoDemoLoc.latitude : driverLoc.latitude,
+              longitude: demoMode ? demoDemoLoc.longitude : driverLoc.longitude,
               latitudeDelta: 0.05,
               longitudeDelta: 0.05,
             }}
           >
             <Marker
               coordinate={{
-                latitude: driverLoc.latitude,
-                longitude: driverLoc.longitude,
+                latitude: demoMode ? demoDemoLoc.latitude : driverLoc.latitude,
+                longitude: demoMode ? demoDemoLoc.longitude : driverLoc.longitude,
               }}
-              title="Driver"
-              pinColor={isVerified ? colors.accent : '#ff9800'}
+              title={demoMode ? "Demo Van" : "Driver"}
+              pinColor={demoMode ? '#3b82f6' : (isVerified ? colors.accent : '#ff9800')}
             />
           </MapView>
         ) : (
@@ -301,7 +307,9 @@ export function ParentHome({
           <View style={styles.overlayBottomCenter}>
             <View style={styles.childStatusBadge}>
               <Text style={styles.childName}>{primaryChild.name}</Text>
-              <Text style={styles.childStatus}>{getChildStatus()}</Text>
+              <Text style={styles.childStatus}>
+                {demoMode ? demoStatus : getChildStatus()}
+              </Text>
             </View>
           </View>
         )}
@@ -355,6 +363,21 @@ export function ParentHome({
               Updated {Math.round((Date.now() - locationLastUpdated.getTime()) / 1000)}s ago
             </Text>
           </View>
+        )}
+
+        {/* Demo Ride Button - First 5 min, shows once */}
+        {!demoHasRun && (
+          <TouchableOpacity
+            style={styles.demoButton}
+            onPress={() => {
+              setDemoMode(true);
+              setDemoStartTime(Date.now());
+              setDemoDemoLoc({ latitude: 12.97, longitude: 77.59 });
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.demoButtonText}>DEMO RIDE</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -539,15 +562,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  sosButton: {
+  topRightButtons: {
     position: 'absolute',
     top: 12,
     right: 16,
+    flexDirection: 'row',
+    gap: 8,
+    zIndex: 10,
+  },
+  infoButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  infoButtonText: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sosButton: {
     backgroundColor: '#dc2626',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    zIndex: 10,
   },
   sosButtonText: {
     color: colors.panel,
@@ -566,6 +606,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   trackingButtonText: {
+    color: colors.panel,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  demoButton: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    zIndex: 10,
+  },
+  demoButtonText: {
     color: colors.panel,
     fontSize: 12,
     fontWeight: '700',
