@@ -34,6 +34,8 @@ export interface DriverProfile {
   name: string;
   vanSeats: number;
   verificationStatus: VerificationStatus;
+  referralCode: string;
+  referredBy: string | null;
 }
 
 export interface ParentProfile {

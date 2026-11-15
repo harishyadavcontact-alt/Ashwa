@@ -146,7 +146,7 @@ export class LocalStore implements AppStore {
     return read().drivers[id] ?? null;
   }
 
-  async saveDriver(driver: Omit<DriverProfile, 'verificationStatus'>) {
+  async saveDriver(driver: { id: string; name: string; vanSeats: number; referredBy?: string | null }) {
     const s = read();
     const existing = s.drivers[driver.id];
     s.drivers[driver.id] = {
@@ -154,6 +154,8 @@ export class LocalStore implements AppStore {
       name: driver.name,
       vanSeats: driver.vanSeats,
       verificationStatus: existing?.verificationStatus ?? 'PENDING',
+      referralCode: existing?.referralCode ?? makeReferralCode(),
+      referredBy: existing?.referredBy ?? driver.referredBy ?? null,
     };
     write(s);
   }

@@ -33,7 +33,7 @@ export interface AppStore {
   getParent(id: string): Promise<ParentProfile | null>;
   saveParent(parent: Omit<ParentProfile, 'referralCode'> & { referralCode?: string }): Promise<ParentProfile>;
   getDriverName(id: string): Promise<string>;
-  saveDriver(driver: Omit<DriverProfile, 'verificationStatus'>): Promise<void>; // status is never set by the driver
+  saveDriver(driver: { id: string; name: string; vanSeats: number; referredBy?: string | null }): Promise<void>; // status and code are never set by the driver
 
   // Admin (founder only)
   isAdmin(): Promise<boolean>;

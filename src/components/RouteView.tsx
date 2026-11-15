@@ -152,6 +152,7 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
 
               {tab === 'stops' && (
                 <StopsTab
+                  routeId={route.id}
                   stops={stops}
                   children={children}
                   direction={stopDirection}
@@ -171,7 +172,27 @@ export function RouteView({ route, driverId, driverName, onBack }: { route: Rout
   );
 }
 
+async function currentPoint(label: string): Promise<Point | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, label }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  });
+}
+
+// Fills a customer field from the phone's location in one tap.
+function useHere(setForm: Dispatch<SetStateAction<CustomerForm>>, field: 'pickup' | 'drop') {
+  currentPoint(field === 'pickup' ? 'Home' : 'Drop').then((p) => {
+    if (!p) return alert('Location is off. Pin the point on the map instead.');
+    setForm((f) => (field === 'pickup' ? { ...f, pickup: p } : { ...f, drop: p }));
+  });
+}
+
 function StopsTab({
+  routeId,
   stops,
   children,
   direction,
@@ -180,6 +201,7 @@ function StopsTab({
   onChanged,
   onError,
 }: {
+  routeId: string;
   stops: RouteStop[];
   children: ChildRecord[];
   direction: Direction;
@@ -189,6 +211,16 @@ function StopsTab({
   onError: (m: string) => void;
 }) {
   const list = orderedStops(stops, direction);
+  const addHere = async (dir: Direction) => {
+    const p = await currentPoint('Stop');
+    if (!p) return onError('Location is off. Pin the stop on the map instead.');
+    try {
+      await store.addStop(routeId, dir, p);
+      await onChanged();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : 'Could not add stop');
+    }
+  };
   const run = async (fn: () => Promise<void>) => {
     try {
       await fn();
@@ -209,8 +241,11 @@ function StopsTab({
           </button>
         </div>
       </div>
-      <button type="button" className="btn primary full" onClick={onAdd}>
-        <Icon name="plus" /> Add stop on map
+      <button type="button" className="btn primary full" onClick={() => addHere(direction)}>
+        <Icon name="plus" /> Add stop: my location
+      </button>
+      <button type="button" className="btn small ghost" onClick={onAdd}>
+        Pin on map instead
       </button>
       <ol className="list">
         {list.map((s, i) => {
@@ -334,16 +369,19 @@ function CustomersTab({
         <span>Monthly fee ₹</span>
         <input inputMode="numeric" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: e.target.value.replace(/\D/g, '') }))} />
       </label>
-      <button type="button" className={`btn ${form.pickup ? 'ghost' : 'primary'} full`} onClick={() => onPickMap('pickup')}>
-        {form.pickup ? 'Pickup set ✓ change' : 'Tap pickup on map'}
+      <button type="button" className={`btn ${form.pickup ? 'ghost' : 'primary'} full`} onClick={() => useHere(setForm, 'pickup')}>
+        {form.pickup ? 'Pickup set ✓ · update' : 'Use my location: pickup'}
+      </button>
+      <button type="button" className="btn small ghost" onClick={() => onPickMap('pickup')}>
+        Pin on map instead
       </button>
       <label className="check">
         <input type="checkbox" checked={form.sameDrop} onChange={(e) => setForm((f) => ({ ...f, sameDrop: e.target.checked }))} />
         Drop is the same as pickup
       </label>
       {!form.sameDrop && (
-        <button type="button" className={`btn ${form.drop ? 'ghost' : 'primary'} full`} onClick={() => onPickMap('drop')}>
-          {form.drop ? 'Drop set ✓ change' : 'Tap drop on map'}
+        <button type="button" className={`btn ${form.drop ? 'ghost' : 'primary'} full`} onClick={() => useHere(setForm, 'drop')}>
+          {form.drop ? 'Drop set ✓ · update' : 'Use my location: drop'}
         </button>
       )}
       <div className="row">

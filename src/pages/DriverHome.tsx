@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Consent } from '../components/Consent';
 import { SharedIcon } from '../components/Icons';
 import Login from '../components/Login';
@@ -16,15 +17,18 @@ export default function DriverHome() {
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [hasParent, setHasParent] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     store.auth.currentUserId().then(setUserId);
   }, []);
 
   const load = useCallback(async (id: string) => {
-    const [d, rs] = await Promise.all([store.getDriver(id), store.listRoutesForDriver(id)]);
+    const [d, rs, p] = await Promise.all([store.getDriver(id), store.listRoutesForDriver(id), store.getParent(id)]);
     setDriver(d);
     setRoutes(rs);
+    setHasParent(!!p);
   }, []);
 
   useEffect(() => {
@@ -102,6 +106,21 @@ export default function DriverHome() {
           <SharedIcon name="plus" /> New route
         </button>
 
+        <a
+          className="btn ghost full"
+          href={`https://wa.me/?text=${encodeURIComponent(`Join me on Ashwa, the school van app. It takes one minute: ${window.location.origin}/driver?ref=${driver.referralCode}`)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Invite a driver
+        </a>
+
+        {hasParent && (
+          <button type="button" className="btn ghost full" onClick={() => navigate('/parent')}>
+            Switch to parent
+          </button>
+        )}
+
         {!joining ? (
           <button type="button" className="btn ghost full" onClick={() => setJoining(true)}>
             Join with code
@@ -132,17 +151,35 @@ function statusText(s: VerificationStatus): string {
   return s === 'PENDING' ? 'Verification pending' : s === 'REJECTED' ? 'Not approved' : 'Paused';
 }
 
-// Pin the school and the van's start on the map, then name the route.
+// One-tap location for the van start and the school gate. The map is the fallback.
+function locate(): Promise<Point | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, label: '' }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  });
+}
+
 function CreateRoute({ ownerId, seats, onCreated, onCancel }: { ownerId: string; seats: number; onCreated: (r: RouteRecord) => void; onCancel: () => void }) {
-  const [name, setName] = useState('');
   const [schoolName, setSchoolName] = useState('');
-  const [target, setTarget] = useState<'school' | 'start'>('school');
   const [school, setSchool] = useState<Point | null>(null);
   const [start, setStart] = useState<Point | null>(null);
+  const [target, setTarget] = useState<'school' | 'start'>('start');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ready = name.trim() && schoolName.trim() && school && start;
+  const ready = schoolName.trim() && school && start;
+
+  async function useHere(what: 'school' | 'start') {
+    setError(null);
+    const here = await locate();
+    if (!here) return setError('Location is off. Tap the map instead.');
+    if (what === 'school') setSchool({ ...here, label: schoolName.trim() || 'School' });
+    else setStart({ ...here, label: 'Van base' });
+  }
 
   return (
     <div className="app">
@@ -157,19 +194,24 @@ function CreateRoute({ ownerId, seats, onCreated, onCancel }: { ownerId: string;
           stops={[]}
           pick={target === 'school' ? school : start}
           pickMode
-          onPick={(p) => (target === 'school' ? setSchool({ ...p, label: schoolName || 'School' }) : setStart({ ...p, label: 'Van base' }))}
+          onPick={(p) => (target === 'school' ? setSchool({ ...p, label: schoolName.trim() || 'School' }) : setStart({ ...p, label: 'Van base' }))}
         />
         <section className="sheet stack">
+          <button type="button" className={`btn ${start ? 'ghost' : 'primary'} full`} onClick={() => useHere('start')}>
+            {start ? 'Van start set ✓ · change' : 'Use my location: van start'}
+          </button>
+          <input placeholder="School name" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
+          <button type="button" className={`btn ${school ? 'ghost' : 'primary'} full`} onClick={() => useHere('school')}>
+            {school ? 'School gate set ✓ · change' : 'Use my location: school gate'}
+          </button>
           <div className="seg">
-            <button type="button" aria-pressed={target === 'school'} onClick={() => setTarget('school')}>
-              {school ? 'School ✓' : 'Tap school'}
-            </button>
             <button type="button" aria-pressed={target === 'start'} onClick={() => setTarget('start')}>
-              {start ? 'Van start ✓' : 'Tap van start'}
+              Pin van start on map
+            </button>
+            <button type="button" aria-pressed={target === 'school'} onClick={() => setTarget('school')}>
+              Pin school on map
             </button>
           </div>
-          <input placeholder="School name" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
-          <input placeholder="Route name, e.g. Morning run" value={name} onChange={(e) => setName(e.target.value)} />
           {error && <p className="error">{error}</p>}
           <button
             type="button"
@@ -179,9 +221,10 @@ function CreateRoute({ ownerId, seats, onCreated, onCancel }: { ownerId: string;
               if (!school || !start) return;
               setBusy(true);
               try {
+                const name = `${schoolName.trim()} run`;
                 const route = await store.createRoute({
                   ownerId,
-                  name: name.trim(),
+                  name,
                   schoolName: schoolName.trim(),
                   school: { ...school, label: schoolName.trim() },
                   start,
@@ -229,19 +272,20 @@ function JoinRoute({ onJoined, onError }: { onJoined: (r: RouteRecord) => void; 
   );
 }
 
+// Name and consent. Seats default to 8 and can be changed later. Invited drivers keep their referrer.
 function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void }) {
   const [name, setName] = useState('');
-  const [seats, setSeats] = useState(8);
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const referredBy = new URLSearchParams(window.location.search).get('ref');
 
   async function save() {
     setError(null);
     if (!name.trim()) return setError('Enter your name');
     if (!consent) return setError('Tick the box to continue');
     try {
-      await store.saveDriver({ id: userId, name: name.trim(), vanSeats: seats });
-      track('driver_profile_created');
+      await store.saveDriver({ id: userId, name: name.trim(), vanSeats: 8, referredBy: referredBy || null });
+      track('driver_profile_created', { via: referredBy ? 'referral' : 'direct' });
       track('consent_given', { role: 'driver' });
       onSaved();
     } catch (e) {
@@ -253,15 +297,11 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
     <div className="auth">
       <div className="brand-mark">ASHWA</div>
       <div className="card stack">
-        <h2>Your van</h2>
-        <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        <label className="field" style={{ margin: 0 }}>
-          <span>Seats</span>
-          <input type="number" min={1} max={15} value={seats} onChange={(e) => setSeats(Number(e.target.value))} />
-        </label>
+        <h2>Your name</h2>
+        <input placeholder="e.g. Ramesh" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" autoFocus />
         <Consent checked={consent} onChange={setConsent} role="driver" />
         <button type="button" className="btn primary full" onClick={save}>
-          Continue
+          Start
         </button>
         {error && <p className="error">{error}</p>}
       </div>

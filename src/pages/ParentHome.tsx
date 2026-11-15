@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Consent } from '../components/Consent';
 import { SharedIcon } from '../components/Icons';
 import { MapView } from '../components/MapView';
@@ -452,14 +452,10 @@ function AddChild({
             <p className="run-next">Tap your home</p>
             {message && <p className="error">{message}</p>}
             <div className="stack">
-              <button
-                type="button"
-                className="btn ghost full"
-                onClick={async () => setPick(await locate())}
-              >
+              <button type="button" className="btn primary full" onClick={async () => setPick(await locate())}>
                 Use my location
               </button>
-              <button type="button" className="btn primary full" disabled={!pick || busy} onClick={save}>
+              <button type="button" className="btn ghost full" disabled={!pick || busy} onClick={save}>
                 Confirm home
               </button>
             </div>
@@ -472,6 +468,11 @@ function AddChild({
 
 function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSignedOut: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [isDriver, setIsDriver] = useState<boolean | null>(null);
+  const navigate = useNavigate();
+  useEffect(() => {
+    store.getDriver(parent.id).then((d) => setIsDriver(!!d));
+  }, [parent.id]);
   const [confirming, setConfirming] = useState(false);
   const link = `${window.location.origin}/parent?ref=${parent.referralCode}`;
   return (
@@ -488,6 +489,12 @@ function AccountPanel({ parent, onSignedOut }: { parent: ParentProfile; onSigned
           Invite a parent
         </a>
       </section>
+
+      {isDriver !== null && (
+        <button type="button" className="btn ghost full" onClick={() => navigate('/driver')}>
+          {isDriver ? 'Switch to driver' : 'I also run a van'}
+        </button>
+      )}
 
       <section className="card">
         <Link to="/privacy">Privacy</Link>

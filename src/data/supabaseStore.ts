@@ -40,6 +40,8 @@ const mapDriver = (r: Row): DriverProfile => ({
   name: r.name as string,
   vanSeats: r.van_seats as number,
   verificationStatus: r.verification_status as VerificationStatus,
+  referralCode: (r.referral_code as string) ?? '',
+  referredBy: (r.referred_by as string | null) ?? null,
 });
 
 const mapParent = (r: Row): ParentProfile => ({
@@ -141,9 +143,14 @@ export class SupabaseStore implements AppStore {
     return r ? mapDriver(r as Row) : null;
   }
 
-  async saveDriver(d: Omit<DriverProfile, 'verificationStatus'>) {
+  async saveDriver(d: { id: string; name: string; vanSeats: number; referredBy?: string | null }) {
     // Status is deliberately not sent: the database trigger rejects status changes from drivers.
-    check(await client().from('drivers').upsert({ id: d.id, name: d.name, van_seats: d.vanSeats }));
+    // referral_code is set by the database default; referred_by is kept once set (see migration 0005).
+    check(
+      await client()
+        .from('drivers')
+        .upsert({ id: d.id, name: d.name, van_seats: d.vanSeats, ...(d.referredBy ? { referred_by: d.referredBy } : {}) }),
+    );
   }
 
   async isAdmin() {
@@ -157,6 +164,8 @@ export class SupabaseStore implements AppStore {
       name: r.name as string,
       vanSeats: r.van_seats as number,
       verificationStatus: r.verification_status as VerificationStatus,
+      referralCode: (r.referral_code as string) ?? '',
+      referredBy: (r.referred_by as string | null) ?? null,
     }));
   }
 
