@@ -388,6 +388,47 @@ export const ServiceCreateSchema = z.object({
 });
 export type ServiceCreateInput = z.infer<typeof ServiceCreateSchema>;
 
+// Shared Rides System Types
+export const SharedRideStatusSchema = z.enum(['FORMING', 'ACTIVE', 'COMPLETED']);
+export type SharedRideStatus = z.infer<typeof SharedRideStatusSchema>;
+
+export type SharedRideGroup = {
+  id: string;
+  serviceId: string;
+  driverId: string;
+  parentIds: string[];
+  childIds: string[];
+  startDate: string;
+  status: SharedRideStatus;
+  pricePerParent: number;
+  seatsUsed: number;
+  pickupCoords?: Array<{ lat: number; lng: number; address: string }>;
+  dropCoords?: Array<{ lat: number; lng: number; address: string }>;
+  createdAt: string;
+};
+
+export type RideOption = {
+  type: 'ALONE' | 'SHARED_2' | 'SHARED_3PLUS';
+  price: number;
+  savings: number;
+  capacity: number;
+};
+
+export type SharedRideOptions = {
+  alone: RideOption;
+  shared2?: { option: RideOption; families: string[] };
+  shared3Plus?: { option: RideOption; families: string[] };
+};
+
+export const EnrollInServiceSchema = z.object({
+  serviceId: z.string().min(1),
+  childId: z.string().min(1),
+  enrollmentType: z.enum(['ALONE', 'SHARED']).default('ALONE'),
+  sharedGroupId: z.string().optional(),
+  price: z.number().int().min(0),
+});
+export type EnrollInServiceInput = z.infer<typeof EnrollInServiceSchema>;
+
 // Referral System Types
 export const PaymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED']);
 export type PaymentStatus = z.infer<typeof PaymentStatusSchema>;
