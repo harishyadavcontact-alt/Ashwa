@@ -117,6 +117,16 @@ export interface PaymentRecord {
   updatedAt: string;
 }
 
+// One point on the map. START is shown to the team only. SCHOOL and STOP are shown to everyone on the route.
+export interface MapStop {
+  kind: 'START' | 'SCHOOL' | 'STOP';
+  direction: Direction | null;
+  order: number;
+  point: Point;
+  childCount: number;
+  names: string[]; // team: every child here. parent: only their own children here.
+}
+
 // What a parent sees when searching for a van.
 export interface RouteSearchResult {
   routeId: string;

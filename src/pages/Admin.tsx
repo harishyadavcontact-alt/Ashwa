@@ -21,7 +21,7 @@ export default function Admin() {
     return (
       <main className="shell">
         <h1>Ashwa admin</h1>
-        <Login onSignedIn={setUserId} />
+        <Login title="Ashwa admin" onSignedIn={setUserId} />
       </main>
     );
   }

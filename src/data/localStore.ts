@@ -12,6 +12,7 @@ import type {
   PaymentRecord,
   Point,
   RouteRecord,
+  MapStop,
   RouteSearchResult,
   RouteStop,
   TripRecord,
@@ -269,6 +270,33 @@ export class LocalStore implements AppStore {
       write(s);
     }
     return route;
+  }
+
+  async routeMap(routeId: string): Promise<MapStop[]> {
+    const s = read();
+    const route = s.routes.find((r) => r.id === routeId);
+    if (!route) throw new Error('Route not found');
+    const me = readUser()?.id;
+    const team = route.ownerId === me || s.members.some((m) => m.routeId === routeId && m.driverId === me);
+    const onRoute = s.children.some((c) => c.routeId === routeId && c.parentId === me);
+    if (!team && !onRoute) throw new Error('Not on this route');
+    const kids = s.children.filter((c) => c.routeId === routeId);
+    const at = (stopId: string) => kids.filter((c) => c.toSchoolStopId === stopId || c.toHomeStopId === stopId);
+    const out: MapStop[] = [];
+    if (team) out.push({ kind: 'START', direction: null, order: 0, point: route.start, childCount: 0, names: [] });
+    out.push({ kind: 'SCHOOL', direction: null, order: 0, point: route.school, childCount: 0, names: [] });
+    for (const st of s.stops.filter((x) => x.routeId === routeId)) {
+      const here = at(st.id);
+      out.push({
+        kind: 'STOP',
+        direction: st.direction,
+        order: st.order,
+        point: st.point,
+        childCount: here.length,
+        names: here.filter((c) => team || c.parentId === me).map((c) => c.firstName).sort(),
+      });
+    }
+    return out;
   }
 
   async listStops(routeId: string) {

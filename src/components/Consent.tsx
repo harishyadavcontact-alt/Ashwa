@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 
-// Plain-language consent. Parents must tick this before their child's details are stored.
-export function Consent({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+// One line, plain words. Full wording lives in the privacy notice.
+export function Consent({ checked, onChange, role }: { checked: boolean; onChange: (v: boolean) => void; role: 'parent' | 'driver' }) {
   return (
-    <label className="check consent">
+    <label className="check">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>
-        I am this child’s parent or guardian. I agree that Ashwa stores my name, mobile number, my child’s first name, school, and
-        pickup and drop points, and shows the van’s location to me and my driver during trips. I can delete my data at any time.{' '}
-        <Link to="/privacy">Read the privacy notice</Link>.
+        {role === 'parent'
+          ? 'I agree that my child’s details are used only for their van. '
+          : 'I will keep my customers’ details private. '}
+        <Link to="/privacy">Privacy</Link>
       </span>
     </label>
   );

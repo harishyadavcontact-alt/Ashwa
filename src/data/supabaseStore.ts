@@ -8,6 +8,7 @@ import type {
   Direction,
   DriverProfile,
   EventRecord,
+  MapStop,
   ParentProfile,
   PaymentRecord,
   Point,
@@ -250,6 +251,18 @@ export class SupabaseStore implements AppStore {
     const route = await this.getRoute(rid as string);
     if (!route) throw new Error('Route not found');
     return route;
+  }
+
+  async routeMap(routeId: string): Promise<MapStop[]> {
+    const rows = check(await client().rpc('route_map', { p_route_id: routeId })) as Row[];
+    return rows.map((r) => ({
+      kind: r.kind as MapStop['kind'],
+      direction: (r.direction as Direction | null) ?? null,
+      order: (r.stop_order as number) ?? 0,
+      point: { lat: r.lat as number, lng: r.lng as number, label: (r.label as string) ?? '' },
+      childCount: (r.child_count as number) ?? 0,
+      names: (r.names as string[] | null) ?? [],
+    }));
   }
 
   async listStops(routeId: string) {

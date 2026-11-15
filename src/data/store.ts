@@ -7,6 +7,7 @@ import type {
   EventRecord,
   ParentProfile,
   PaymentRecord,
+  MapStop,
   Point,
   RouteRecord,
   RouteSearchResult,
@@ -53,6 +54,7 @@ export interface AppStore {
   getRoute(routeId: string): Promise<RouteRecord | null>;
   joinRouteByCode(code: string): Promise<RouteRecord>; // joins as the signed-in user
   listStops(routeId: string): Promise<RouteStop[]>;
+  routeMap(routeId: string): Promise<MapStop[]>;
   addStop(routeId: string, direction: Direction, point: Point): Promise<RouteStop>;
   moveStop(stopId: string, delta: -1 | 1): Promise<void>;
   removeStop(stopId: string): Promise<void>;

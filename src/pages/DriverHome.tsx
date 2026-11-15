@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Consent } from '../components/Consent';
+import { SharedIcon } from '../components/Icons';
 import Login from '../components/Login';
-import { PointInput } from '../components/PointInput';
+import { MapView } from '../components/MapView';
 import { RouteView } from '../components/RouteView';
 import { store } from '../data';
 import type { DriverProfile, Point, RouteRecord, VerificationStatus } from '../data/types';
@@ -12,6 +13,8 @@ export default function DriverHome() {
   const [driver, setDriver] = useState<DriverProfile | null | undefined>(undefined);
   const [routes, setRoutes] = useState<RouteRecord[]>([]);
   const [open, setOpen] = useState<RouteRecord | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,120 +31,176 @@ export default function DriverHome() {
     if (userId) load(userId).catch((e: unknown) => setMessage(String(e)));
   }, [userId, load]);
 
-  if (userId === undefined || (userId && driver === undefined)) return <main className="shell">Loading…</main>;
+  if (userId === undefined || (userId && driver === undefined)) return <div className="auth">Loading…</div>;
+  if (userId === null) return <Login title="Driver sign-in" onSignedIn={setUserId} />;
+  if (driver === null) return <DriverSetup userId={userId} onSaved={() => load(userId)} />;
+  if (!driver) return null;
 
-  if (userId === null) {
+  if (open) {
     return (
-      <main className="shell">
-        <h1>Driver sign-in</h1>
-        <Login onSignedIn={setUserId} />
-      </main>
+      <RouteView
+        route={open}
+        driverId={userId!}
+        driverName={driver.name}
+        onBack={() => {
+          setOpen(null);
+          load(userId!);
+        }}
+      />
     );
   }
 
-  if (driver === null) {
-    return <DriverSetup userId={userId} onSaved={() => load(userId)} />;
-  }
-
-  if (open && driver) {
-    return <RouteView route={open} driverId={userId!} driverName={driver!.name} onBack={() => { setOpen(null); load(userId!); }} />;
+  if (creating) {
+    return (
+      <CreateRoute
+        ownerId={userId!}
+        seats={driver.vanSeats}
+        onCancel={() => setCreating(false)}
+        onCreated={(r) => {
+          setCreating(false);
+          setOpen(r);
+          load(userId!);
+        }}
+      />
+    );
   }
 
   return (
-    <main className="shell">
-      <h1>Hi {driver?.name}</h1>
-      {driver && driver.verificationStatus !== 'VERIFIED' && <VerificationBanner status={driver.verificationStatus} />}
-      {message && (
-        <p role="alert" className="error">
-          {message}
-        </p>
-      )}
+    <div className="app">
+      <header className="topbar">
+        <span className="title">Hi {driver.name}</span>
+        {driver.verificationStatus !== 'VERIFIED' && <span className={`chip ${driver.verificationStatus === 'PENDING' ? 'warn' : 'bad'}`}>{statusText(driver.verificationStatus)}</span>}
+      </header>
 
-      <section className="card">
-        <h2>Your routes</h2>
-        {routes.length === 0 && <p>No routes yet. Create one for your van, or join a route with a code.</p>}
-        <ul className="routes">
-          {routes.map((r) => (
-            <li key={r.id}>
-              <button type="button" className="route-link" onClick={() => setOpen(r)}>
-                <strong>{r.name}</strong>
-                <span className="muted"> · {r.schoolName}{r.ownerId === userId ? '' : ' · joined'}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <main className="screen stack">
+        {message && <p className="error">{message}</p>}
 
-      <CreateRoute ownerId={userId!} seats={driver?.vanSeats ?? 8} onCreated={(r) => { setOpen(r); load(userId!); }} onError={setMessage} />
-      <JoinRoute onJoined={(r) => { setOpen(r); load(userId!); }} onError={setMessage} />
-    </main>
+        {routes.map((r) => (
+          <button key={r.id} type="button" className="card route-card" onClick={() => setOpen(r)}>
+            <div className="row between">
+              <strong>{r.name}</strong>
+              {r.ownerId !== userId && <span className="chip">Joined</span>}
+            </div>
+            <div className="muted">{r.schoolName} · {r.vanSeats} seats</div>
+          </button>
+        ))}
+
+        {routes.length === 0 && <p className="muted">No routes yet.</p>}
+
+        <button type="button" className="btn primary full" onClick={() => setCreating(true)}>
+          <SharedIcon name="plus" /> New route
+        </button>
+
+        {!joining ? (
+          <button type="button" className="btn ghost full" onClick={() => setJoining(true)}>
+            Join with code
+          </button>
+        ) : (
+          <JoinRoute
+            onJoined={(r) => {
+              setJoining(false);
+              setOpen(r);
+              load(userId!);
+            }}
+            onError={setMessage}
+          />
+        )}
+      </main>
+
+      <nav className="tabbar" aria-label="Main">
+        <button type="button" aria-current="page">
+          <SharedIcon name="route" />
+          Routes
+        </button>
+      </nav>
+    </div>
   );
 }
 
-function CreateRoute({ ownerId, seats, onCreated, onError }: { ownerId: string; seats: number; onCreated: (r: RouteRecord) => void; onError: (m: string) => void }) {
-  const [name, setName] = useState('');
-  const [school, setSchool] = useState('');
-  const [schoolPoint, setSchoolPoint] = useState<Point | null>(null);
-  const [start, setStart] = useState<Point | null>(null);
-  const [saving, setSaving] = useState(false);
+function statusText(s: VerificationStatus): string {
+  return s === 'PENDING' ? 'Verification pending' : s === 'REJECTED' ? 'Not approved' : 'Paused';
+}
 
-  async function save() {
-    if (!name.trim() || !school.trim() || !schoolPoint || !start) {
-      onError('Give the route a name, the school name, the school location and where the van starts.');
-      return;
-    }
-    setSaving(true);
-    try {
-      const route = await store.createRoute({
-        ownerId,
-        name: name.trim(),
-        schoolName: school.trim(),
-        school: { ...schoolPoint, label: school.trim() },
-        start: { ...start, label: start.label || 'Van base' },
-        vanSeats: seats,
-      });
-      track('route_created', { seats: seats });
-      onCreated(route);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not create the route');
-    } finally {
-      setSaving(false);
-    }
-  }
+// Pin the school and the van's start on the map, then name the route.
+function CreateRoute({ ownerId, seats, onCreated, onCancel }: { ownerId: string; seats: number; onCreated: (r: RouteRecord) => void; onCancel: () => void }) {
+  const [name, setName] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [target, setTarget] = useState<'school' | 'start'>('school');
+  const [school, setSchool] = useState<Point | null>(null);
+  const [start, setStart] = useState<Point | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const ready = name.trim() && schoolName.trim() && school && start;
 
   return (
-    <section className="card">
-      <h2>Create a route</h2>
-      <p className="muted">One route is one van going to one school. Add a second route if you run a second school.</p>
-      <label>
-        Route name
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sunrise morning" />
-      </label>
-      <label>
-        School name
-        <input value={school} onChange={(e) => setSchool(e.target.value)} />
-      </label>
-      <PointInput label="School location (stand at the gate)" value={schoolPoint} onChange={setSchoolPoint} namePlaceholder="School gate" defaultName="School" />
-      <PointInput label="Where the van starts (where you park)" value={start} onChange={setStart} namePlaceholder="Parking spot" defaultName="Van base" />
-      <button type="button" onClick={save} disabled={saving}>
-        Create route
-      </button>
-    </section>
+    <div className="app">
+      <header className="topbar">
+        <button type="button" className="btn small ghost" onClick={onCancel} aria-label="Back">
+          <SharedIcon name="back" />
+        </button>
+        <span className="title">New route</span>
+      </header>
+      <div className="stage">
+        <MapView
+          stops={[]}
+          pick={target === 'school' ? school : start}
+          pickMode
+          onPick={(p) => (target === 'school' ? setSchool({ ...p, label: schoolName || 'School' }) : setStart({ ...p, label: 'Van base' }))}
+        />
+        <section className="sheet stack">
+          <div className="seg">
+            <button type="button" aria-pressed={target === 'school'} onClick={() => setTarget('school')}>
+              {school ? 'School ✓' : 'Tap school'}
+            </button>
+            <button type="button" aria-pressed={target === 'start'} onClick={() => setTarget('start')}>
+              {start ? 'Van start ✓' : 'Tap van start'}
+            </button>
+          </div>
+          <input placeholder="School name" value={schoolName} onChange={(e) => setSchoolName(e.target.value)} />
+          <input placeholder="Route name, e.g. Morning run" value={name} onChange={(e) => setName(e.target.value)} />
+          {error && <p className="error">{error}</p>}
+          <button
+            type="button"
+            className="btn primary full"
+            disabled={!ready || busy}
+            onClick={async () => {
+              if (!school || !start) return;
+              setBusy(true);
+              try {
+                const route = await store.createRoute({
+                  ownerId,
+                  name: name.trim(),
+                  schoolName: schoolName.trim(),
+                  school: { ...school, label: schoolName.trim() },
+                  start,
+                  vanSeats: seats,
+                });
+                track('route_created', { seats });
+                onCreated(route);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not create route');
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Create route
+          </button>
+        </section>
+      </div>
+    </div>
   );
 }
 
 function JoinRoute({ onJoined, onError }: { onJoined: (r: RouteRecord) => void; onError: (m: string) => void }) {
   const [code, setCode] = useState('');
   return (
-    <section className="card">
-      <h2>Join a route</h2>
-      <p className="muted">Replacement driver? Ask the van owner for the route code.</p>
-      <label>
-        Route code
-        <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} autoCapitalize="characters" />
-      </label>
+    <div className="card stack">
+      <input placeholder="Route code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} autoCapitalize="characters" />
       <button
         type="button"
+        className="btn primary full"
         disabled={code.trim().length < 6}
         onClick={async () => {
           try {
@@ -155,7 +214,7 @@ function JoinRoute({ onJoined, onError }: { onJoined: (r: RouteRecord) => void; 
       >
         Join
       </button>
-    </section>
+    </div>
   );
 }
 
@@ -168,7 +227,7 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
   async function save() {
     setError(null);
     if (!name.trim()) return setError('Enter your name');
-    if (!consent) return setError('Please tick the consent box to continue.');
+    if (!consent) return setError('Tick the box to continue');
     try {
       await store.saveDriver({ id: userId, name: name.trim(), vanSeats: seats });
       track('driver_profile_created');
@@ -180,45 +239,21 @@ function DriverSetup({ userId, onSaved }: { userId: string; onSaved: () => void 
   }
 
   return (
-    <main className="shell">
-      <h1>Set up your van</h1>
-      <label>
-        Your name
-        <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-      </label>
-      <label>
-        Seats in the van
-        <input type="number" min={1} max={15} value={seats} onChange={(e) => setSeats(Number(e.target.value))} />
-      </label>
-      <label className="check consent">
-        <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-        <span>
-          I will only use Ashwa to run my van for the families who choose me. I will keep their children’s details private and I
-          will not share them. <Link to="/privacy">Read the privacy notice</Link>.
-        </span>
-      </label>
-      <button type="button" onClick={save}>
-        Continue
-      </button>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-    </main>
-  );
-}
-
-function VerificationBanner({ status }: { status: VerificationStatus }) {
-  const text =
-    status === 'PENDING'
-      ? 'Waiting for Ashwa verification. You can set up your route and invite your own families now. Parents who search for a van will see you once you are verified.'
-      : status === 'REJECTED'
-        ? 'Verification was not approved. Please contact the Ashwa team.'
-        : 'Your listing is paused. Please contact the Ashwa team.';
-  return (
-    <p role="status" className="status">
-      {text}
-    </p>
+    <div className="auth">
+      <div className="brand-mark">ASHWA</div>
+      <div className="card stack">
+        <h2>Your van</h2>
+        <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        <label className="field" style={{ margin: 0 }}>
+          <span>Seats</span>
+          <input type="number" min={1} max={15} value={seats} onChange={(e) => setSeats(Number(e.target.value))} />
+        </label>
+        <Consent checked={consent} onChange={setConsent} role="driver" />
+        <button type="button" className="btn primary full" onClick={save}>
+          Continue
+        </button>
+        {error && <p className="error">{error}</p>}
+      </div>
+    </div>
   );
 }

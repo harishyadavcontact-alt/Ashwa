@@ -1,359 +1,393 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { store } from '../data';
+import type { ChildRecord, Direction, MapStop, Point, RouteRecord, RouteStop } from '../data/types';
 import { track } from '../lib/analytics';
-import type { ChildRecord, Direction, Point, RouteRecord, RouteStop } from '../data/types';
 import { orderedStops, phoneKey } from '../logic/routes';
 import { FeesPanel } from './FeesPanel';
-import { PointInput } from './PointInput';
+import { SharedIcon as Icon } from './Icons';
+import { MapView } from './MapView';
 import { RunPanel } from './RunPanel';
 
-type Tab = 'route' | 'customers' | 'run' | 'fees';
+type Tab = 'run' | 'customers' | 'stops' | 'fees';
+type PickFor = 'stop' | 'pickup' | 'drop' | null;
 
+interface CustomerForm {
+  firstName: string;
+  phone: string;
+  fee: string;
+  pickup: Point | null;
+  sameDrop: boolean;
+  drop: Point | null;
+}
+
+const EMPTY_FORM: CustomerForm = { firstName: '', phone: '', fee: '', pickup: null, sameDrop: true, drop: null };
+
+// The driver's map. Tap the map to place stops and homes. The sheet holds the run, customers, stops and fees.
 export function RouteView({ route, driverId, driverName, onBack }: { route: RouteRecord; driverId: string; driverName: string; onBack: () => void }) {
-  const [tab, setTab] = useState<Tab>('route');
+  const [tab, setTab] = useState<Tab>('run');
+  const [map, setMap] = useState<MapStop[]>([]);
   const [stops, setStops] = useState<RouteStop[]>([]);
   const [children, setChildren] = useState<ChildRecord[]>([]);
-  const [message, setMessage] = useState<string | null>(null);
-  const isOwner = route.ownerId === driverId;
+  const [pickFor, setPickFor] = useState<PickFor>(null);
+  const [pickPoint, setPickPoint] = useState<Point | null>(null);
+  const [stopDirection, setStopDirection] = useState<Direction>('TO_SCHOOL');
+  const [form, setForm] = useState<CustomerForm>(EMPTY_FORM);
+  const [error, setError] = useState<string | null>(null);
+  const [showCode, setShowCode] = useState(false);
 
   async function load() {
-    const [s, c] = await Promise.all([store.listStops(route.id), store.listChildrenForRoute(route.id)]);
+    const [m, s, c] = await Promise.all([store.routeMap(route.id), store.listStops(route.id), store.listChildrenForRoute(route.id)]);
+    setMap(m);
     setStops(s);
     setChildren(c);
   }
 
   useEffect(() => {
-    load().catch((e: unknown) => setMessage(String(e)));
+    load().catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not load'));
+    // reload when the route changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route.id]);
 
-  const parentLink = `${window.location.origin}/parent?route=${route.id}`;
-  const parentShare = encodeURIComponent(
-    `Hi, I'm ${driverName}, your school van to ${route.schoolName}. Tap to see your child's van live and get alerts. Free: ${parentLink}`,
-  );
+  function startPick(what: Exclude<PickFor, null>) {
+    setPickFor(what);
+    setPickPoint(null);
+  }
+
+  function endPick() {
+    setPickFor(null);
+    setPickPoint(null);
+  }
+
+  async function confirmPick() {
+    if (!pickPoint || !pickFor) return;
+    if (pickFor === 'stop') {
+      try {
+        await store.addStop(route.id, stopDirection, pickPoint);
+        await load();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not add stop');
+      }
+    } else if (pickFor === 'pickup') {
+      setForm((f) => ({ ...f, pickup: pickPoint }));
+      setTab('customers');
+    } else {
+      setForm((f) => ({ ...f, drop: pickPoint }));
+      setTab('customers');
+    }
+    endPick();
+  }
+
+  const inviteLink = `${window.location.origin}/parent?route=${route.id}`;
+  const picking = pickFor !== null;
 
   return (
-    <main className="shell">
-      <button type="button" onClick={onBack}>
-        ← All routes
-      </button>
-      <h1>{route.name}</h1>
-      <p className="muted">
-        {route.schoolName} · {route.vanSeats} seats
-      </p>
-      {message && (
-        <p role="alert" className="error">
-          {message}
-        </p>
-      )}
+    <div className="app">
+      <header className="topbar">
+        <button type="button" className="btn small ghost" onClick={onBack} aria-label="Back">
+          <Icon name="back" />
+        </button>
+        <span className="title">{route.name}</span>
+        <button type="button" className="chip" onClick={() => setShowCode((v) => !v)}>
+          {showCode ? route.code : 'Code'}
+        </button>
+      </header>
 
-      <nav className="tabs" aria-label="Route sections">
-        {(['route', 'customers', 'run', 'fees'] as Tab[]).map((t) => (
-          <button key={t} type="button" aria-current={tab === t} className={tab === t ? 'tab on' : 'tab'} onClick={() => setTab(t)}>
-            {t === 'route' ? 'Route' : t === 'customers' ? 'Customers' : t === 'run' ? 'Run' : 'Fees'}
-          </button>
-        ))}
-      </nav>
+      <div className="stage">
+        <MapView stops={map} pick={pickPoint} pickMode={picking} onPick={setPickPoint} />
 
-      {tab === 'route' && (
-        <>
-          {isOwner && (
-            <section className="card">
-              <h2>Replacement driver code</h2>
-              <p>
-                A substitute driver opens the app, picks <em>Join a route</em>, and enters <strong className="code">{route.code}</strong>. They
-                then see the same stops and can run it.
+        <section className="sheet" aria-label="Route">
+          {picking && (
+            <div className="stack">
+              <p className="run-next">
+                {pickFor === 'stop' ? 'Tap the stop' : pickFor === 'pickup' ? 'Tap the home for pickup' : 'Tap the drop point'}
               </p>
-            </section>
+              <div className="row">
+                <button type="button" className="btn primary grow" disabled={!pickPoint} onClick={confirmPick}>
+                  Confirm
+                </button>
+                <button type="button" className="btn ghost" onClick={endPick}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
-          <section className="card">
-            <h2>Invite parents</h2>
-            <p>Parents tap this, sign in, and add their child to your van.</p>
-            <p>
-              <a href={`https://wa.me/?text=${parentShare}`} target="_blank" rel="noreferrer" onClick={() => track('invite_shared', { role: 'driver' })}>
-                Share on WhatsApp
-              </a>
-            </p>
-          </section>
-          <StopList
-            routeId={route.id}
-            title="To school (morning)"
-            direction="TO_SCHOOL"
-            startLabel={route.start.label}
-            endLabel={`School: ${route.school.label}`}
-            stops={stops}
-            children={children}
-            editable={isOwner}
-            onChanged={load}
-            onError={setMessage}
-          />
-          <StopList
-            routeId={route.id}
-            title="Back home (afternoon)"
-            direction="TO_HOME"
-            startLabel={`School: ${route.school.label}`}
-            endLabel={`End: ${route.start.label}`}
-            stops={stops}
-            children={children}
-            editable={isOwner}
-            onChanged={load}
-            onError={setMessage}
-          />
-        </>
-      )}
 
-      {tab === 'customers' && (
-        <Customers route={route} driverName={driverName} children={children} onChanged={load} onError={setMessage} />
-      )}
+          {!picking && (
+            <>
+              <nav className="seg" aria-label="Sections" style={{ marginBottom: 12 }}>
+                {(['run', 'customers', 'stops', 'fees'] as Tab[]).map((t) => (
+                  <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)}>
+                    {t === 'run' ? 'Run' : t === 'customers' ? `Customers (${children.length})` : t === 'stops' ? 'Stops' : 'Fees'}
+                  </button>
+                ))}
+              </nav>
 
-      {tab === 'run' && <RunPanel route={route} stops={stops} children={children} driverId={driverId} />}
+              {error && <p className="error">{error}</p>}
+              {showCode && (
+                <p className="notice">
+                  Replacement driver code: <span className="code">{route.code}</span>
+                </p>
+              )}
 
-      {tab === 'fees' && <FeesPanel children={children} />}
-    </main>
+              {tab === 'run' && <RunPanel route={route} stops={stops} children={children} driverId={driverId} />}
+
+              {tab === 'customers' && (
+                <CustomersTab
+                  route={route}
+                  driverName={driverName}
+                  inviteLink={inviteLink}
+                  children={children}
+                  form={form}
+                  setForm={setForm}
+                  onPickMap={startPick}
+                  onChanged={load}
+                  onError={setError}
+                />
+              )}
+
+              {tab === 'stops' && (
+                <StopsTab
+                  stops={stops}
+                  children={children}
+                  direction={stopDirection}
+                  onDirection={setStopDirection}
+                  onAdd={() => startPick('stop')}
+                  onChanged={load}
+                  onError={setError}
+                />
+              )}
+
+              {tab === 'fees' && <FeesPanel customers={children} />}
+            </>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }
 
-function StopList({
-  routeId,
-  title,
-  direction,
-  startLabel,
-  endLabel,
+function StopsTab({
   stops,
   children,
-  editable,
+  direction,
+  onDirection,
+  onAdd,
   onChanged,
   onError,
 }: {
-  routeId: string;
-  title: string;
-  direction: Direction;
-  startLabel: string;
-  endLabel: string;
   stops: RouteStop[];
   children: ChildRecord[];
-  editable: boolean;
+  direction: Direction;
+  onDirection: (d: Direction) => void;
+  onAdd: () => void;
   onChanged: () => Promise<void>;
   onError: (m: string) => void;
 }) {
   const list = orderedStops(stops, direction);
-  const usedBy = (stopId: string) =>
-    children.filter((c) => (direction === 'TO_SCHOOL' ? c.toSchoolStopId : c.toHomeStopId) === stopId);
-  const [point, setPoint] = useState<Point | null>(null);
-
-  async function act(fn: () => Promise<void>) {
+  const run = async (fn: () => Promise<void>) => {
     try {
       await fn();
       await onChanged();
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not save');
+      onError(e instanceof Error ? e.message : 'Try again');
     }
-  }
-
+  };
   return (
-    <section className="card">
-      <h2>{title}</h2>
-      <ol className="stops">
-        <li className="fixed">{startLabel}</li>
-        {list.length === 0 && <li className="muted">No stops yet. Add customers or waypoints.</li>}
+    <div className="stack">
+      <div className="row">
+        <div className="seg grow">
+          <button type="button" aria-pressed={direction === 'TO_SCHOOL'} onClick={() => onDirection('TO_SCHOOL')}>
+            To school
+          </button>
+          <button type="button" aria-pressed={direction === 'TO_HOME'} onClick={() => onDirection('TO_HOME')}>
+            Home
+          </button>
+        </div>
+      </div>
+      <button type="button" className="btn primary full" onClick={onAdd}>
+        <Icon name="plus" /> Add stop on map
+      </button>
+      <ol className="list">
         {list.map((s, i) => {
-          const kids = usedBy(s.id);
+          const users = children.filter((c) => (direction === 'TO_SCHOOL' ? c.toSchoolStopId : c.toHomeStopId) === s.id).length;
           return (
-            <li key={s.id}>
-              <span>
-                {i + 1}. {s.point.label}
-                {kids.length > 0 && <span className="muted"> · {kids.map((k) => k.firstName).join(', ')}</span>}
+            <li key={s.id} className="row">
+              <span className="grow">
+                {i + 1}. {s.point.label || 'Stop'} {users > 0 && <span className="muted">· {users} kids</span>}
               </span>
-              {editable && (
-                <span className="row small">
-                  <button type="button" aria-label={`Move ${s.point.label} up`} disabled={i === 0} onClick={() => act(() => store.moveStop(s.id, -1))}>
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Move ${s.point.label} down`}
-                    disabled={i === list.length - 1}
-                    onClick={() => act(() => store.moveStop(s.id, 1))}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${s.point.label}`}
-                    disabled={kids.length > 0}
-                    onClick={() => act(() => store.removeStop(s.id))}
-                  >
-                    ✕
-                  </button>
-                </span>
-              )}
+              <button type="button" className="btn small ghost" aria-label="Move up" disabled={i === 0} onClick={() => run(() => store.moveStop(s.id, -1))}>
+                ↑
+              </button>
+              <button type="button" className="btn small ghost" aria-label="Move down" disabled={i === list.length - 1} onClick={() => run(() => store.moveStop(s.id, 1))}>
+                ↓
+              </button>
+              <button type="button" className="btn small danger" aria-label="Remove" disabled={users > 0} onClick={() => run(() => store.removeStop(s.id))}>
+                ✕
+              </button>
             </li>
           );
         })}
-        <li className="fixed">{endLabel}</li>
       </ol>
-      {editable && (
-        <details>
-          <summary>Add a waypoint to this direction</summary>
-          <PointInput label="Waypoint" value={point} onChange={setPoint} defaultName="Stop" />
-          <button
-            type="button"
-            disabled={!point}
-            onClick={() => {
-              if (!point) return;
-              act(async () => {
-                await store.addStop(routeId, direction, point);
-                setPoint(null);
-              });
-            }}
-          >
-            Add waypoint
-          </button>
-        </details>
-      )}
-    </section>
+      {list.length === 0 && <p className="muted">No stops yet.</p>}
+    </div>
   );
 }
 
-function Customers({
+function CustomersTab({
   route,
   driverName,
+  inviteLink,
   children,
+  form,
+  setForm,
+  onPickMap,
   onChanged,
   onError,
 }: {
   route: RouteRecord;
   driverName: string;
+  inviteLink: string;
   children: ChildRecord[];
+  form: CustomerForm;
+  setForm: Dispatch<SetStateAction<CustomerForm>>;
+  onPickMap: (what: 'pickup' | 'drop') => void;
   onChanged: () => Promise<void>;
   onError: (m: string) => void;
 }) {
-  const [firstName, setFirstName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [fee, setFee] = useState('');
-  const [pickup, setPickup] = useState<Point | null>(null);
-  const [sameDrop, setSameDrop] = useState(true);
-  const [drop, setDrop] = useState<Point | null>(null);
-  const [added, setAdded] = useState<ChildRecord | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<ChildRecord | null>(null);
 
   async function save() {
-    if (!firstName.trim() || phoneKey(phone).length !== 10 || !pickup) {
-      onError('Enter the child’s name, the parent’s 10-digit mobile number and the pickup point.');
+    if (!form.firstName.trim() || phoneKey(form.phone).length !== 10 || !form.pickup) {
+      onError('Name, 10-digit mobile and pickup are needed.');
       return;
     }
-    if (!sameDrop && !drop) {
-      onError('Set the drop point, or tick “same as pickup”.');
+    if (!form.sameDrop && !form.drop) {
+      onError('Set the drop point on the map.');
       return;
     }
-    setSaving(true);
+    setBusy(true);
     try {
       const child = await store.addCustomer({
         routeId: route.id,
-        firstName,
-        parentPhone: phone,
-        monthlyFee: Number(fee) || 0,
-        pickup,
-        drop: sameDrop ? null : drop,
+        firstName: form.firstName,
+        parentPhone: form.phone,
+        monthlyFee: Number(form.fee) || 0,
+        pickup: form.pickup,
+        drop: form.sameDrop ? null : form.drop,
       });
-      track('customer_added', { hasDrop: sameDrop ? 0 : 1 });
-      setAdded(child);
-      setFirstName('');
-      setPhone('');
-      setFee('');
-      setPickup(null);
-      setDrop(null);
-      setSameDrop(true);
+      track('customer_added', { hasDrop: form.sameDrop ? 0 : 1 });
+      setSaved(child);
+      setAdding(false);
+      setForm(EMPTY_FORM);
       await onChanged();
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Could not add the customer');
+      onError(e instanceof Error ? e.message : 'Could not add customer');
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
-  const link = `${window.location.origin}/parent?route=${route.id}`;
-
-  return (
-    <>
-      <section className="card">
-        <h2>Customers ({children.length})</h2>
-        {children.length === 0 && <p>No customers yet. Add your first one below.</p>}
-        <ul className="customers">
-          {children.map((c) => (
-            <CustomerRow key={c.id} child={c} onChanged={onChanged} onError={onError} />
-          ))}
-        </ul>
-      </section>
-
-      <section className="card">
-        <h2>Add a customer</h2>
-        <label>
-          Child’s first name
-          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-        </label>
-        <label>
-          Parent’s mobile number
-          <input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98xxxxxxxx" />
-        </label>
-        <label>
-          Monthly fee (₹)
-          <input inputMode="numeric" value={fee} onChange={(e) => setFee(e.target.value.replace(/\D/g, ''))} />
-        </label>
-        <PointInput label="Pickup point (home)" value={pickup} onChange={setPickup} defaultName="Home" />
-        <label className="check">
-          <input type="checkbox" checked={sameDrop} onChange={(e) => setSameDrop(e.target.checked)} />
-          Drop-off is the same as pickup
-        </label>
-        {!sameDrop && <PointInput label="Drop point" value={drop} onChange={setDrop} defaultName="Drop" />}
-        <button type="button" onClick={save} disabled={saving}>
-          Save customer
+  if (!adding) {
+    return (
+      <div className="stack">
+        <button type="button" className="btn primary full" onClick={() => setAdding(true)}>
+          <Icon name="plus" /> Add customer
         </button>
-
-        {added && (
-          <div className="status">
-            <p>Added {added.firstName}. Send the parent the link so they can join:</p>
-            <p>
-              <a
-                href={`https://wa.me/91${added.parentPhone}?text=${encodeURIComponent(
-                  `Hi, it's ${driverName}, your school van driver. Tap to join and see your child's van live: ${link}`,
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Send to parent on WhatsApp
-              </a>
-            </p>
+        {saved && (
+          <div className="notice row between">
+            <span>
+              <strong>{saved.firstName}</strong> added
+            </span>
+            <a
+              href={`https://wa.me/91${saved.parentPhone}?text=${encodeURIComponent(`Hi, it's ${driverName}, your school van. Join here: ${inviteLink}`)}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => track('invite_shared', { role: 'driver' })}
+            >
+              Send invite
+            </a>
           </div>
         )}
-      </section>
-    </>
+        <CustomerList children={children} onChanged={onChanged} onError={onError} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="stack">
+      <label className="field" style={{ margin: 0 }}>
+        <span>Child’s name</span>
+        <input value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} />
+      </label>
+      <label className="field" style={{ margin: 0 }}>
+        <span>Parent’s mobile</span>
+        <input type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="98xxx xxxxx" />
+      </label>
+      <label className="field" style={{ margin: 0 }}>
+        <span>Monthly fee ₹</span>
+        <input inputMode="numeric" value={form.fee} onChange={(e) => setForm((f) => ({ ...f, fee: e.target.value.replace(/\D/g, '') }))} />
+      </label>
+      <button type="button" className={`btn ${form.pickup ? 'ghost' : 'primary'} full`} onClick={() => onPickMap('pickup')}>
+        {form.pickup ? 'Pickup set ✓ change' : 'Tap pickup on map'}
+      </button>
+      <label className="check">
+        <input type="checkbox" checked={form.sameDrop} onChange={(e) => setForm((f) => ({ ...f, sameDrop: e.target.checked }))} />
+        Drop is the same as pickup
+      </label>
+      {!form.sameDrop && (
+        <button type="button" className={`btn ${form.drop ? 'ghost' : 'primary'} full`} onClick={() => onPickMap('drop')}>
+          {form.drop ? 'Drop set ✓ change' : 'Tap drop on map'}
+        </button>
+      )}
+      <div className="row">
+        <button type="button" className="btn primary grow" onClick={save} disabled={busy}>
+          Save customer
+        </button>
+        <button type="button" className="btn ghost" onClick={() => setAdding(false)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomerList({ children, onChanged, onError }: { children: ChildRecord[]; onChanged: () => Promise<void>; onError: (m: string) => void }) {
+  if (children.length === 0) return <p className="muted">No customers yet.</p>;
+  return (
+    <ul className="list">
+      {children.map((c) => (
+        <CustomerRow key={c.id} child={c} onChanged={onChanged} onError={onError} />
+      ))}
+    </ul>
   );
 }
 
 function CustomerRow({ child, onChanged, onError }: { child: ChildRecord; onChanged: () => Promise<void>; onError: (m: string) => void }) {
   const [fee, setFee] = useState(String(child.monthlyFee));
   return (
-    <li className="customer">
-      <div>
-        <strong>{child.firstName}</strong> · {child.parentPhone}{' '}
-        <span className="badge">{child.parentId ? 'Joined' : 'Waiting for parent'}</span>
+    <li className="row between">
+      <div className="grow">
+        <strong>{child.firstName}</strong> <span className={`chip ${child.parentId ? 'ok' : 'warn'}`}>{child.parentId ? 'Joined' : 'Invited'}</span>
+        <div className="muted">•••• {child.parentPhone.slice(-4)}</div>
       </div>
-      <div className="row">
-        <input aria-label={`Monthly fee for ${child.firstName}`} inputMode="numeric" value={fee} onChange={(e) => setFee(e.target.value.replace(/\D/g, ''))} />
-        <button
-          type="button"
-          onClick={async () => {
-            try {
-              await store.setMonthlyFee(child.id, Number(fee) || 0);
-              await onChanged();
-            } catch (e) {
-              onError(e instanceof Error ? e.message : 'Could not save the fee');
-            }
-          }}
-        >
-          Save fee
-        </button>
-      </div>
+      <input
+        aria-label={`Monthly fee for ${child.firstName}`}
+        inputMode="numeric"
+        value={fee}
+        onChange={(e) => setFee(e.target.value.replace(/\D/g, ''))}
+        onBlur={async () => {
+          if (Number(fee) === child.monthlyFee) return;
+          try {
+            await store.setMonthlyFee(child.id, Number(fee) || 0);
+            await onChanged();
+          } catch (e) {
+            onError(e instanceof Error ? e.message : 'Could not save fee');
+          }
+        }}
+        style={{ width: 96, height: 40 }}
+      />
     </li>
   );
 }

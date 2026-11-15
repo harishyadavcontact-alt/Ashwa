@@ -6,19 +6,16 @@ import Privacy from './pages/Privacy';
 
 function Landing() {
   return (
-    <main className="shell">
-      <h1>Ashwa</h1>
-      <p>Know where your child's school van is, without calling anyone.</p>
-      <p>
-        <Link to="/parent">I'm a parent</Link>
-      </p>
-      <p>
-        <Link to="/driver">I'm a van driver</Link>
-      </p>
-      <p className="muted">
-        <Link to="/privacy">Privacy notice</Link>
-      </p>
-    </main>
+    <div className="auth">
+      <div className="brand-mark">ASHWA</div>
+      <div className="card stack">
+        <Link className="btn primary full" to="/parent">I’m a parent</Link>
+        <Link className="btn ghost full" to="/driver">I’m a driver</Link>
+        <div className="footer-links">
+          <Link to="/privacy">Privacy</Link>
+        </div>
+      </div>
+    </div>
   );
 }
 
