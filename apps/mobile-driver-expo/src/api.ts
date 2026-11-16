@@ -126,4 +126,14 @@ export const api = {
     request<any>('/owner/loan/auto-deduct', { method: 'PATCH', token, body: { enabled } }),
   getLoanSchedule: (token: string) =>
     request<any>('/owner/loan/schedule', { token }),
+
+  // Driver Loans
+  applyForLoan: (token: string, principal: number, downPayment: number) =>
+    request<any>('/api/loans/apply', { method: 'POST', token, body: { driverId: 'current', principal, downPayment } }),
+  getDriverLoan: (token: string, driverId: string) =>
+    request<any>(`/api/loans/${driverId}`, { token }),
+  toggleLoanAutoDeductDriver: (token: string, loanId: string, autoDeduct: boolean) =>
+    request<any>(`/api/loans/${loanId}/toggle-auto-deduct`, { method: 'POST', token, body: { autoDeduct } }),
+  getDriverLoanSchedule: (token: string, loanId: string) =>
+    request<any>(`/api/loans/${loanId}/schedule`, { token }),
 };

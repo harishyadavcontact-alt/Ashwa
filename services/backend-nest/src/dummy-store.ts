@@ -1142,7 +1142,37 @@ class DummyStore {
 
     return ride;
   }
+
+  // ===== ATTENDANCE =====
+  logAttendance(driverId: string, date: string, attended: boolean, tripsCompleted: number, onTimePercentage: number, missedStops = 0, parentComplaints = 0): AttendanceRecord {
+    const recordId = `ATT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const record: AttendanceRecord = {
+      id: recordId,
+      driverId,
+      date,
+      attended,
+      tripsCompleted,
+      onTimePercentage,
+      missedStops,
+      parentComplaints,
+      createdAt: new Date(),
+    };
+    // TODO: Later, insert into attendance_records table in Supabase
+    this.attendanceRecords.set(recordId, record);
+    return record;
+  }
+
+  getAttendance(driverId: string): { records: AttendanceRecord[]; thisMonthPercentage: number; trend: number } {
+    const records = Array.from(this.attendanceRecords.values()).filter((a) => a.driverId === driverId);
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const thisMonthRecords = records.filter((r) => r.date.startsWith(currentMonth));
+    const thisMonthAttended = thisMonthRecords.filter((r) => r.attended).length;
+    const thisMonthPercentage = thisMonthRecords.length > 0 ? Math.round((thisMonthAttended / thisMonthRecords.length) * 100) : 0;
+    const trend = thisMonthPercentage > 90 ? 1 : thisMonthPercentage > 75 ? 0 : -1;
+
+    return { records: records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 30), thisMonthPercentage, trend };
+  }
 }
 
 export const dummyStore = new DummyStore();
-export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService, Call, SharedRide };
+export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService, Call, SharedRide, AttendanceRecord };

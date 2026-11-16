@@ -91,6 +91,7 @@ export default function App() {
     { id: '1', title: 'Driver License', type: 'LICENSE' as const, expiryDate: '2025-06-30', status: 'VERIFIED' as const, url: 'https://demo.com/license.pdf' },
     { id: '2', title: 'Insurance Policy', type: 'INSURANCE' as const, expiryDate: '2025-12-31', status: 'VERIFIED' as const, url: 'https://demo.com/insurance.pdf' },
   ]);
+  const [loan, setLoan] = useState<any>(null);
   const [loanSchedule, setLoanSchedule] = useState([
     { dueDate: '15 Dec 2024', amount: 8333, status: 'PAID' as const },
     { dueDate: '15 Jan 2025', amount: 8333, status: 'PAID' as const },
