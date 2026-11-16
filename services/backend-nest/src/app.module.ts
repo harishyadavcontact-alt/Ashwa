@@ -15,6 +15,7 @@ import { SharedRidesModule } from './shared-rides/shared-rides.module';
 import { JobsModule } from './jobs/jobs.module';
 import { PayrollModule } from './payroll/payroll.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { LoansModule } from './loans/loans.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 

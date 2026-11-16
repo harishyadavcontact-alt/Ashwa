@@ -894,7 +894,93 @@ class DummyStore {
     // TODO: Later, update in Supabase
     return request;
   }
+
+  // ===== ADMIN EVENTS & METRICS =====
+  logEvent(userId: string, userType: 'parent' | 'driver' | 'owner', event: Event['event'], metadata?: Record<string, any>): Event {
+    const eventRecord: Event = {
+      id: `EVT-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+      userId,
+      userType,
+      event,
+      timestamp: new Date(),
+      metadata,
+    };
+    this.events.push(eventRecord);
+    return eventRecord;
+  }
+
+  getMetrics(): { families: number; kids: number; routes: number; drivers: number; totalEarnings: number; growthRate: number } {
+    const families = this.parents.size;
+    const kids = Array.from(this.parents.values()).length;
+    const routes = new Set(Array.from(this.parents.values()).map((p) => p.school)).size;
+    const drivers = new Set(Array.from(this.parents.values()).map((p) => p.driverId)).size;
+
+    const referralEarnings = Array.from(this.referrals.values())
+      .filter((r) => r.claimedBy)
+      .reduce((sum, r) => sum + r.earned, 0);
+    const totalEarnings = referralEarnings;
+
+    const growthRate = 1.15;
+    return { families, kids, routes, drivers, totalEarnings, growthRate };
+  }
+
+  getFunnel(): Record<string, number> {
+    const inviteSent = this.events.filter((e) => e.event === 'invite_sent').length;
+    const inviteOpened = this.events.filter((e) => e.event === 'invite_opened').length;
+    const signupComplete = this.events.filter((e) => e.event === 'signup_complete').length;
+    const childSetup = this.events.filter((e) => e.event === 'child_setup').length;
+    const linked = this.events.filter((e) => e.event === 'linked').length;
+    const firstTrip = this.events.filter((e) => e.event === 'first_trip').length;
+
+    return { inviteSent, inviteOpened, signupComplete, childSetup, linked, firstTrip };
+  }
+
+  getChurn(): Record<string, number> {
+    const funnel = this.getFunnel();
+    return {
+      'invite_to_open': Math.max(0, funnel.inviteSent - funnel.inviteOpened),
+      'open_to_signup': Math.max(0, funnel.inviteOpened - funnel.signupComplete),
+      'signup_to_child': Math.max(0, funnel.signupComplete - funnel.childSetup),
+      'child_to_linked': Math.max(0, funnel.childSetup - funnel.linked),
+      'linked_to_trip': Math.max(0, funnel.linked - funnel.firstTrip),
+    };
+  }
+
+  getUnitEconomics(): { cac: number; ltv: number; paybackPeriod: number } {
+    return { cac: 500, ltv: 2000, paybackPeriod: 3 };
+  }
+
+  getLeaderboard(limit = 10): LeaderboardEntry[] {
+    const leaderboardMap = new Map<string, LeaderboardEntry>();
+
+    Array.from(this.parents.values()).forEach((parent) => {
+      const driverId = parent.driverId;
+      if (!leaderboardMap.has(driverId)) {
+        const driversParents = this.getAllParentsForDriver(driverId);
+        const driverTrips = Array.from(this.trips.values()).filter((t) => t.driverId === driverId).length;
+
+        leaderboardMap.set(driverId, {
+          driverId,
+          name: `Driver ${driverId.substring(0, 4)}`,
+          familiesServed: driversParents.length,
+          tripsCompleted: driverTrips,
+          attendancePercentage: 95,
+          referralsSent: 0,
+          totalEarnings: driversParents.length * 1000,
+          rating: 4.8,
+          rank: 0,
+        });
+      }
+    });
+
+    const entries = Array.from(leaderboardMap.values())
+      .sort((a, b) => b.familiesServed - a.familiesServed)
+      .slice(0, limit)
+      .map((entry, idx) => ({ ...entry, rank: idx + 1 }));
+
+    return entries;
+  }
 }
 
 export const dummyStore = new DummyStore();
-export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Service, DriverService };
+export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService };
