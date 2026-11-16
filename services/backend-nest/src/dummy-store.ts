@@ -980,7 +980,88 @@ class DummyStore {
 
     return entries;
   }
+
+  // ===== CALLS & SOS =====
+  initiateCall(fromPhone: string, toPhone: string, fromRole: 'driver' | 'parent', reason?: string): Call {
+    const callId = `CALL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const call: Call = {
+      id: callId,
+      fromPhone,
+      toPhone,
+      fromRole,
+      status: 'initiated',
+      reason,
+      initiatedAt: new Date(),
+    };
+
+    // TODO: Later, integrate with Twilio to actually initiate call
+    console.log(`[DUMMY] Call initiated: ${fromRole} ${fromPhone} → ${toPhone} (${reason || 'normal'})`);
+
+    this.calls.set(callId, call);
+    return call;
+  }
+
+  answerCall(callId: string): Call | null {
+    const call = this.calls.get(callId);
+    if (!call) return null;
+
+    call.status = 'connected';
+    call.answeredAt = new Date();
+
+    // TODO: Later, connect Twilio call
+    console.log(`[DUMMY] Call answered: ${call.id}`);
+
+    return call;
+  }
+
+  declineCall(callId: string): Call | null {
+    const call = this.calls.get(callId);
+    if (!call) return null;
+
+    call.status = 'declined';
+    call.endedAt = new Date();
+
+    // TODO: Later, disconnect Twilio call
+    console.log(`[DUMMY] Call declined: ${call.id}`);
+
+    return call;
+  }
+
+  endCall(callId: string): Call | null {
+    const call = this.calls.get(callId);
+    if (!call) return null;
+
+    if (!call.endedAt) {
+      call.endedAt = new Date();
+      if (call.answeredAt) {
+        call.durationSeconds = Math.floor((call.endedAt.getTime() - call.answeredAt.getTime()) / 1000);
+      }
+    }
+
+    call.status = 'ended';
+
+    // TODO: Later, disconnect Twilio call and log to analytics
+    console.log(`[DUMMY] Call ended: ${call.id} (${call.durationSeconds || 0}s)`);
+
+    return call;
+  }
+
+  getCall(callId: string): Call | null {
+    return this.calls.get(callId) || null;
+  }
+
+  getCallHistory(phone: string): Call[] {
+    return Array.from(this.calls.values()).filter((c) => c.fromPhone === phone || c.toPhone === phone);
+  }
+
+  getIncomingCall(toPhone: string): Call | null {
+    const incomingCalls = Array.from(this.calls.values())
+      .filter((c) => c.toPhone === toPhone && c.status === 'initiated')
+      .sort((a, b) => b.initiatedAt.getTime() - a.initiatedAt.getTime());
+
+    return incomingCalls.length > 0 ? incomingCalls[0] : null;
+  }
 }
 
 export const dummyStore = new DummyStore();
-export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService };
+export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService, Call };

@@ -4,6 +4,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { PrismaService } from '../prisma.service';
 import { summarizeDriverTrust } from '../drivers/driver-trust';
+import { dummyStore } from '../dummy-store';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
