@@ -60,4 +60,40 @@ export class AdminController {
   suspend(@Param('driverId') driverId: string) {
     return this.prisma.driverProfile.update({ where: { userId: driverId }, data: { verificationStatus: 'SUSPENDED' } });
   }
+
+  // ===== METRICS & ANALYTICS =====
+  @Get('metrics')
+  getMetrics() {
+    // TODO: Later, aggregate from Supabase tables
+    return dummyStore.getMetrics();
+  }
+
+  @Get('funnel')
+  getFunnel() {
+    // TODO: Later, compute from events table in Supabase
+    return dummyStore.getFunnel();
+  }
+
+  @Get('churn')
+  getChurn() {
+    // TODO: Later, compute churn from events table
+    return dummyStore.getChurn();
+  }
+
+  @Get('unit-economics')
+  getUnitEconomics() {
+    // TODO: Later, compute from actual CAC/LTV data in Supabase
+    return dummyStore.getUnitEconomics();
+  }
+
+  @Get('leaderboard')
+  getLeaderboard(@Query('limit') limit = 10) {
+    return dummyStore.getLeaderboard(limit);
+  }
+
+  @Post('events')
+  logEvent(@Query('userId') userId: string, @Query('userType') userType: 'parent' | 'driver' | 'owner', @Query('event') event: string) {
+    // TODO: Later, insert into events table
+    return dummyStore.logEvent(userId, userType, event as any);
+  }
 }
