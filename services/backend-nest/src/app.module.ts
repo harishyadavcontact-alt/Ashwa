@@ -12,6 +12,9 @@ import { AdminModule } from './admin/admin.module';
 import { ReferralsModule } from './referrals/referrals.module';
 import { InvitesModule } from './invites/invites.module';
 import { SharedRidesModule } from './shared-rides/shared-rides.module';
+import { JobsModule } from './jobs/jobs.module';
+import { PayrollModule } from './payroll/payroll.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 
@@ -31,6 +34,9 @@ import { HealthController } from './health.controller';
     ReferralsModule,
     InvitesModule,
     SharedRidesModule,
+    JobsModule,
+    PayrollModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })
