@@ -17,6 +17,9 @@ import { PayrollModule } from './payroll/payroll.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { LoansModule } from './loans/loans.module';
 import { DiscoveryModule } from './discovery/discovery.module';
+import { StoriesModule } from './stories/stories.module';
+import { CallsModule } from './calls/calls.module';
+import { AttendanceModule } from './attendance/attendance.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 
@@ -41,6 +44,9 @@ import { HealthController } from './health.controller';
     NotificationsModule,
     LoansModule,
     DiscoveryModule,
+    StoriesModule,
+    CallsModule,
+    AttendanceModule,
   ],
   controllers: [HealthController],
 })

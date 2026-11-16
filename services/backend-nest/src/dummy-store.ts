@@ -1061,7 +1061,88 @@ class DummyStore {
 
     return incomingCalls.length > 0 ? incomingCalls[0] : null;
   }
+
+  // ===== SHARED RIDES =====
+  createSharedRide(
+    driverId: string,
+    pickups: { lat: number; lng: number; parentPhone: string; childName: string; address?: string }[],
+    drops: { lat: number; lng: number; school: string }[],
+    baseCost: number,
+  ): SharedRide {
+    const id = `RIDE-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    const families = pickups.map((p) => p.parentPhone);
+    const costPerFamily = families.length > 0 ? Math.round(baseCost / families.length) : baseCost;
+
+    // TODO: Later, replace with Supabase insert
+    const ride: SharedRide = {
+      id,
+      driverId,
+      pickups,
+      drops,
+      baseCost,
+      costPerFamily,
+      families,
+      status: 'available',
+      createdAt: new Date(),
+    };
+
+    this.sharedRides.set(id, ride);
+    return ride;
+  }
+
+  getAvailableSharedRides(parentLat: number, parentLng: number, radiusKm: number = 5): SharedRide[] {
+    // TODO: Later, implement distance-based matching from Supabase
+    return Array.from(this.sharedRides.values())
+      .filter((r) => r.status === 'available')
+      .slice(0, 5);
+  }
+
+  joinSharedRide(rideId: string, parentPhone: string, childName: string, pickupLat: number, pickupLng: number): SharedRide | null {
+    const ride = this.sharedRides.get(rideId);
+    if (!ride) return null;
+
+    // TODO: Later, replace with Supabase update
+    ride.families.push(parentPhone);
+    ride.pickups.push({
+      lat: pickupLat,
+      lng: pickupLng,
+      parentPhone,
+      childName,
+    });
+
+    ride.costPerFamily = Math.round(ride.baseCost / ride.families.length);
+
+    return ride;
+  }
+
+  getSharedRideDetails(rideId: string): SharedRide | null {
+    return this.sharedRides.get(rideId) || null;
+  }
+
+  startSharedRide(rideId: string): SharedRide | null {
+    const ride = this.sharedRides.get(rideId);
+    if (!ride) return null;
+
+    ride.status = 'in_progress';
+    ride.pickups.forEach((p) => {
+      p.pickupTime = new Date();
+    });
+
+    return ride;
+  }
+
+  completeSharedRide(rideId: string): SharedRide | null {
+    const ride = this.sharedRides.get(rideId);
+    if (!ride) return null;
+
+    ride.status = 'completed';
+    ride.drops.forEach((d) => {
+      d.dropTime = new Date();
+    });
+
+    return ride;
+  }
 }
 
 export const dummyStore = new DummyStore();
-export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService, Call };
+export type { Invite, Parent, Referral, Trip, Job, JobAssignment, PayrollRecord, Notification, Loan, Event, LeaderboardEntry, Service, DriverService, Call, SharedRide };
