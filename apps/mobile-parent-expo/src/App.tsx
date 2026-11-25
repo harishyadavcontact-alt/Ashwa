@@ -1034,7 +1034,38 @@ export default function App() {
             potentialEarnings={referralStats?.potentialEarnings || 0}
             onCopyCode={() => {
               if (referralCode) {
-                setStatus('Referral code copied!');
+                // Copy to clipboard
+                try {
+                  // Native: React Native Clipboard
+                  if (typeof navigator === 'undefined' && global.NativeModules?.RNCClipboard) {
+                    global.NativeModules.RNCClipboard.setString(referralCode);
+                  } else if (navigator?.clipboard) {
+                    navigator.clipboard.writeText(referralCode);
+                  }
+                  setStatus('Code copied! Share on WhatsApp →');
+
+                  // Open WhatsApp with preset message
+                  setTimeout(() => {
+                    const message = `I'm using Ashwa to track my child's pickup/drop. Join me and earn ₹200! Code: ${referralCode}`;
+                    const encodedMsg = encodeURIComponent(message);
+                    const link = `https://wa.me/?text=${encodedMsg}`;
+
+                    // Try native Linking first
+                    if (typeof window !== 'undefined' && window.Linking) {
+                      window.Linking.openURL(link).catch(() => {
+                        // Fallback: open web link
+                        if (typeof window !== 'undefined') {
+                          window.open(link, '_blank');
+                        }
+                      });
+                    } else if (typeof window !== 'undefined') {
+                      window.open(link, '_blank');
+                    }
+                  }, 500);
+                } catch (error) {
+                  console.error('Failed to copy code', error);
+                  setStatus('Failed to copy. Try again.');
+                }
               }
             }}
             onViewDetails={() => {

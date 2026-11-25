@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
 import { colors } from './theme';
+import { api } from './api';
 
 interface InviteSignupScreenProps {
   inviteCode: string;

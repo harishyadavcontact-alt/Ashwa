@@ -41,6 +41,30 @@ type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' |
 
 const SESSION_KEY = 'ashwa.driver.session';
 
+// Bangalore schools for dropdown selection
+const SCHOOLS_LIST = [
+  { code: 'KA-1001', name: "St. Xavier's, Whitefield" },
+  { code: 'KA-1002', name: 'DAV Public School, Indiranagar' },
+  { code: 'KA-1003', name: 'Vibgyor High, Yeshwantpur' },
+  { code: 'KA-1004', name: 'Presidency School, Richmond Town' },
+  { code: 'KA-1005', name: 'Baldwin Girls High School, Oorgaum Road' },
+  { code: 'KA-1006', name: 'Bishop Cotton School, Lalbagh Road' },
+  { code: 'KA-1007', name: 'Bangalore International School, Hennur' },
+  { code: 'KA-1008', name: 'Delhi Public School, Whitefield' },
+  { code: 'KA-1009', name: 'Inventure Academy, Bannerghatta Road' },
+  { code: 'KA-1010', name: 'The Campion School, Whitefield' },
+  { code: 'KA-1011', name: 'Jnanodaya School, Sarjapur Road' },
+  { code: 'KA-1012', name: 'Ebenezer International School, Whitefield' },
+  { code: 'KA-1013', name: 'Mahatma Gandhi International School, Ramamurthy Nagar' },
+  { code: 'KA-1014', name: 'Stonehill International School, Sarjapur' },
+  { code: 'KA-1015', name: 'Greenwood High School, Sarjapur Road' },
+  { code: 'KA-1016', name: 'Gear International School, Whitefield' },
+  { code: 'KA-1017', name: 'Gitanjali School, Hennur Road' },
+  { code: 'KA-1018', name: 'RV School, Basavanagudi' },
+  { code: 'KA-1019', name: 'Sri Kumaran Children\'s Home, CV Raman Nagar' },
+  { code: 'KA-1020', name: 'Cathedral High School, Nandi Hills' },
+];
+
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <View style={styles.emptyCard}>
@@ -53,8 +77,9 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
   const [token, setToken] = useState('');
-  const [email, setEmail] = useState('driver@ashwa.app');
-  const [password, setPassword] = useState('Password123');
+  const [phone, setPhone] = useState('9876543210');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [incomingState, setIncomingState] = useState<CurrentAssignmentState | null>(null);
   const [assignmentState, setAssignmentState] = useState<CurrentAssignmentState | null>(null);
   const [tripState, setTripState] = useState<CurrentTripState | null>(null);
@@ -66,7 +91,7 @@ export default function App() {
     baseLng: 77.59,
   });
   const [serviceInfo, setServiceInfo] = useState({
-    institutionIds: '',
+    institutionIds: ['KA-1001', 'KA-1003', 'KA-1005'], // Pre-select 3 schools for Dad
     makeModel: 'Toyota HiAce',
     seatsCapacity: '12',
     plateNumber: 'KA-01-0001',
@@ -533,17 +558,40 @@ export default function App() {
     }
   }
 
-  async function login() {
+  async function requestOTP() {
     setLoading(true);
     try {
-      const result = await api.login(email, password);
+      await api.requestOTP(phone, 'DRIVER');
+      setOtpSent(true);
+      setStatus('OTP sent to ' + phone);
+    } catch (error: any) {
+      setStatus(error.message || 'Failed to send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyOTP() {
+    setLoading(true);
+    try {
+      const result = await api.verifyOTP(phone, otp, 'DRIVER');
       await AsyncStorage.setItem(SESSION_KEY, result.accessToken);
       setToken(result.accessToken);
-      // Skip onboarding - go straight to trip (Elon-style: no tutorial, just tap and go)
       setScreen('trip');
-      setStatus('Signed in. Route loaded. Tap START TRIP to begin.');
+      setStatus('Verified. Route loaded. Tap START TRIP to begin.');
     } catch (error: any) {
-      setStatus(error.message || 'Login failed.');
+      setStatus(error.message || 'OTP verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function login() {
+    if (!otpSent) {
+      await requestOTP();
+    } else {
+      await verifyOTP();
+    }
     } finally {
       setLoading(false);
     }
@@ -1156,9 +1204,20 @@ export default function App() {
           <Text style={styles.bodyLight}>The screen should always tell the driver the next correct action.</Text>
         </View>
         <View style={styles.card}>
-          <TextInput value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} autoCapitalize="none" />
-          <TextInput value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} secureTextEntry />
-          <Button title={loading ? 'Signing in...' : 'Sign in'} onPress={login} disabled={loading} />
+          {!otpSent ? (
+            <>
+              <Text style={styles.bodyDark}>Enter your phone number</Text>
+              <TextInput value={phone} onChangeText={setPhone} placeholder="Phone number" style={styles.input} keyboardType="phone-pad" />
+              <Button title={loading ? 'Sending OTP...' : 'Get OTP'} onPress={requestOTP} disabled={loading} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.bodyDark}>Enter OTP sent to {phone}</Text>
+              <TextInput value={otp} onChangeText={setOtp} placeholder="6-digit OTP" style={styles.input} keyboardType="number-pad" />
+              <Button title={loading ? 'Verifying...' : 'Verify OTP'} onPress={verifyOTP} disabled={loading} />
+              <Button title="Change phone" onPress={() => { setOtpSent(false); setOtp(''); }} />
+            </>
+          )}
           <Text style={styles.status}>{status}</Text>
         </View>
       </SafeAreaView>

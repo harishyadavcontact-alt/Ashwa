@@ -85,4 +85,20 @@ export const api = {
     request('/attendance/excused', { method: 'POST', token, body: { childId, date } }),
   payInvoice: (token: string, invoiceId: string) =>
     request(`/invoices/${invoiceId}/pay`, { method: 'POST', token }),
+
+  // Invite signup
+  claimInvite: (body: {
+    code: string;
+    parentPhone: string;
+    childName: string;
+    school: string;
+    pickupLat: number;
+    pickupLng: number;
+    dropLat: number;
+    dropLng: number;
+  }) =>
+    request<{ success: boolean; parent: any; message: string }>('/api/invites/claim', {
+      method: 'POST',
+      body,
+    }),
 };

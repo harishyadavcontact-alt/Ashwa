@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (NestJS)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "cwd": "services/backend-nest",
+      "port": 3000
+    },
+    {
+      "name": "Driver App (Expo)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "cwd": "apps/mobile-driver-expo",
+      "port": 8081
+    },
+    {
+      "name": "Parent App (Expo)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "cwd": "apps/mobile-parent-expo",
+      "port": 8082
+    }
+  ]
+}
