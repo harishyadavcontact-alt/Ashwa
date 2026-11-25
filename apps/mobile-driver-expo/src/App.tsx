@@ -609,10 +609,7 @@ export default function App() {
       });
       await api.saveProfile(token, profile);
       await api.saveServiceInfo(token, {
-        institutionIds: serviceInfo.institutionIds
-          .split(',')
-          .map((value) => value.trim())
-          .filter(Boolean),
+        institutionIds: serviceInfo.institutionIds,
         serviceArea: profile.serviceArea,
         baseLat: profile.baseLat,
         baseLng: profile.baseLng,
@@ -1245,7 +1242,32 @@ export default function App() {
           <View style={styles.cardInline}>
             <TextInput value={profile.name} onChangeText={(value) => setProfile({ ...profile, name: value })} placeholder="Driver name" style={styles.input} />
             <TextInput value={profile.serviceArea} onChangeText={(value) => setProfile({ ...profile, serviceArea: value })} placeholder="Service area" style={styles.input} />
-            <TextInput value={serviceInfo.institutionIds} onChangeText={(value) => setServiceInfo({ ...serviceInfo, institutionIds: value })} placeholder="Institution ids (comma-separated)" style={styles.input} />
+            {/* Multi-select schools dropdown */}
+            <Text style={styles.cardTitle}>Select schools you serve</Text>
+            <View style={{ maxHeight: 200, marginVertical: 8 }}>
+              <ScrollView style={{ borderColor: '#ccc', borderWidth: 1, borderRadius: 8, paddingVertical: 8 }}>
+                {SCHOOLS_LIST.map((school) => (
+                  <TouchableOpacity
+                    key={school.code}
+                    onPress={() => {
+                      setServiceInfo({
+                        ...serviceInfo,
+                        institutionIds: serviceInfo.institutionIds.includes(school.code)
+                          ? serviceInfo.institutionIds.filter((id) => id !== school.code)
+                          : [...serviceInfo.institutionIds, school.code],
+                      });
+                    }}
+                    style={{ paddingVertical: 8, paddingHorizontal: 12, borderBottomColor: '#eee', borderBottomWidth: 1 }}
+                  >
+                    <Text style={{ fontSize: 14, color: serviceInfo.institutionIds.includes(school.code) ? '#1b5e20' : '#333' }}>
+                      {serviceInfo.institutionIds.includes(school.code) ? '✓ ' : '  '}
+                      {school.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            <Text style={{ fontSize: 12, color: '#666', marginTop: 8 }}>Selected: {serviceInfo.institutionIds.map((id) => SCHOOLS_LIST.find((s) => s.code === id)?.name || id).join(', ')}</Text>
             <TextInput value={serviceInfo.makeModel} onChangeText={(value) => setServiceInfo({ ...serviceInfo, makeModel: value })} placeholder="Vehicle" style={styles.input} />
             <TextInput value={serviceInfo.seatsCapacity} onChangeText={(value) => setServiceInfo({ ...serviceInfo, seatsCapacity: value })} placeholder="Seats" style={styles.input} keyboardType="number-pad" />
             <TextInput value={serviceInfo.plateNumber} onChangeText={(value) => setServiceInfo({ ...serviceInfo, plateNumber: value })} placeholder="Plate number" style={styles.input} />
