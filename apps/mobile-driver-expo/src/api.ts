@@ -28,6 +28,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export const api = {
   login: (email: string, password: string) =>
     request<{ accessToken: string }>('/auth/login', { method: 'POST', body: { email, password } }),
+  requestOTP: (phone: string, role: string) =>
+    request<{ otpSent: true }>('/auth/request-otp', { method: 'POST', body: { phone, role } }),
+  verifyOTP: (phone: string, otp: string, role: string) =>
+    request<{ accessToken: string }>('/auth/verify-otp', { method: 'POST', body: { phone, otp, role } }),
   currentAssignments: (token: string) => request<CurrentAssignmentState>('/assignments/current', { token }),
   incomingAssignments: (token: string) => request<CurrentAssignmentState>('/assignments/incoming', { token }),
   meSummary: (token: string) => request<DriverServiceSummary>('/drivers/me/summary', { token }),

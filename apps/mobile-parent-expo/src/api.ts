@@ -41,6 +41,10 @@ export const api = {
       method: 'POST',
       body: { email, password },
     }),
+  requestOTP: (phone: string, role: string) =>
+    request<{ otpSent: true }>('/auth/request-otp', { method: 'POST', body: { phone, role } }),
+  verifyOTP: (phone: string, otp: string, role: string) =>
+    request<{ accessToken: string }>('/auth/verify-otp', { method: 'POST', body: { phone, otp, role } }),
   listChildren: (token: string) => request<any[]>('/children', { token }),
   createChild: (token: string, body: ChildUpsertInput) =>
     request('/children', { method: 'POST', token, body }),
