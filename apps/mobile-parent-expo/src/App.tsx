@@ -829,9 +829,20 @@ export default function App() {
           </Text>
         </View>
         <View style={styles.card}>
-          <TextInput value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} autoCapitalize="none" />
-          <TextInput value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} secureTextEntry />
-          <Button title={loading ? 'Signing in...' : 'Sign in'} onPress={login} disabled={loading} />
+          {!otpSent ? (
+            <>
+              <Text style={styles.bodyDark}>Enter your phone number</Text>
+              <TextInput value={phone} onChangeText={setPhone} placeholder="Phone number" style={styles.input} keyboardType="phone-pad" />
+              <Button title={loading ? 'Sending OTP...' : 'Get OTP'} onPress={requestOTP} disabled={loading} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.bodyDark}>Enter OTP sent to {phone}</Text>
+              <TextInput value={otp} onChangeText={setOtp} placeholder="6-digit OTP" style={styles.input} keyboardType="number-pad" />
+              <Button title={loading ? 'Verifying...' : 'Verify OTP'} onPress={verifyOTP} disabled={loading} />
+              <Button title="Change phone" onPress={() => { setOtpSent(false); setOtp(''); }} />
+            </>
+          )}
           <Text style={styles.status}>{status}</Text>
         </View>
       </SafeAreaView>

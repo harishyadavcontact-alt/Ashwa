@@ -1172,6 +1172,70 @@ class DummyStore {
 
     return { records: records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 30), thisMonthPercentage, trend };
   }
+
+  /**
+   * Create a mock trip with 10 children at St. Xavier's school.
+   * Used to verify multi-child alert delivery before Dad's first real trip.
+   * Returns trip object + list of 10 children + expected notifications.
+   */
+  createMockTrip10Children() {
+    const tripId = `mock-trip-${Date.now()}`;
+    const driverId = 'dad-driver-1';
+    const schoolName = "St. Xavier's School";
+    const schoolLat = 12.9716;
+    const schoolLng = 77.5946;
+
+    // Create 10 test children, each with a unique parent
+    const mockChildren = [
+      { childId: 'child-1', childName: 'Arjun', parentPhone: '9876543211' },
+      { childId: 'child-2', childName: 'Priya', parentPhone: '9876543212' },
+      { childId: 'child-3', childName: 'Rohan', parentPhone: '9876543213' },
+      { childId: 'child-4', childName: 'Ananya', parentPhone: '9876543214' },
+      { childId: 'child-5', childName: 'Vikram', parentPhone: '9876543215' },
+      { childId: 'child-6', childName: 'Shreya', parentPhone: '9876543216' },
+      { childId: 'child-7', childName: 'Nikhil', parentPhone: '9876543217' },
+      { childId: 'child-8', childName: 'Divya', parentPhone: '9876543218' },
+      { childId: 'child-9', childName: 'Aditya', parentPhone: '9876543219' },
+      { childId: 'child-10', childName: 'Zara', parentPhone: '9876543220' },
+    ];
+
+    // Create trip with mock children as assignments
+    const trip: Trip = {
+      id: tripId,
+      driverId,
+      startedAt: new Date(),
+      stops: [
+        {
+          school: schoolName,
+          lat: schoolLat,
+          lng: schoolLng,
+        },
+      ],
+    };
+
+    this.trips.set(tripId, trip);
+
+    // Log event: trip started with 10 children
+    this.events.push({
+      userId: driverId,
+      userType: 'driver',
+      event: 'first_trip',
+      timestamp: new Date(),
+      metadata: { tripId, childrenCount: 10, school: schoolName },
+    });
+
+    return {
+      tripId,
+      driverId,
+      schoolName,
+      schoolLat,
+      schoolLng,
+      mockChildren,
+      expectedNotificationCount: 10,
+      instructions:
+        'When trip progresses to school, driver app fires DRIVER_AT_SCHOOL event. Backend notifies all 10 parents separately. Expected: 10 notifications in notifications table.',
+    };
+  }
 }
 
 export const dummyStore = new DummyStore();
