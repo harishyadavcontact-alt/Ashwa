@@ -75,4 +75,13 @@ export class NotificationsService {
   ): Promise<{ childId: string; parentPhone: string; notified: boolean }[]> {
     return dummyStore.verifyChildNotificationDelivery(tripId, eventType);
   }
+
+  /**
+   * Create a mock trip with 10 children at St. Xavier's school.
+   * Used to verify multi-child alert delivery before Dad's first real trip.
+   * Returns: trip object + list of 10 children + expected notifications
+   */
+  async createMockTrip10Children() {
+    return dummyStore.createMockTrip10Children();
+  }
 }

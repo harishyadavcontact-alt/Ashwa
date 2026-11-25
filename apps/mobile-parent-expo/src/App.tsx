@@ -74,8 +74,9 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 export default function App() {
   const [screen, setScreen] = useState<Screen>('auth');
   const [token, setToken] = useState('');
-  const [email, setEmail] = useState('parent@ashwa.app');
-  const [password, setPassword] = useState('Password123');
+  const [phone, setPhone] = useState('9876543210');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
   const [children, setChildren] = useState<ChildRecord[]>([]);
   const [institutions, setInstitutions] = useState<InstitutionRecord[]>([]);
   const [drivers, setDrivers] = useState<DriverServiceSummary[]>([]);
@@ -319,17 +320,40 @@ export default function App() {
     }
   }
 
-  async function login() {
+  async function requestOTP() {
     setLoading(true);
     try {
-      const result = await api.login(email, password);
+      await api.requestOTP(phone, 'PARENT');
+      setOtpSent(true);
+      setStatus('OTP sent to ' + phone);
+    } catch (error: any) {
+      setStatus(error.message || 'Failed to send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyOTP() {
+    setLoading(true);
+    try {
+      const result = await api.verifyOTP(phone, otp, 'PARENT');
       await AsyncStorage.setItem(SESSION_KEY, result.accessToken);
       setToken(result.accessToken);
       setScreen('home');
-      setStatus('Signed in. Review child status and assignment state below.');
+      setStatus('Verified. Review child status below.');
     } catch (error: any) {
-      setStatus(error.message || 'Login failed.');
+      setStatus(error.message || 'OTP verification failed.');
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function login() {
+    if (!otpSent) {
+      await requestOTP();
+    } else {
+      await verifyOTP();
+    }
       setLoading(false);
     }
   }

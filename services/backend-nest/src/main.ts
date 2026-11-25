@@ -5,10 +5,18 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma.service';
 import { validateRuntimeEnv } from './config';
+import { DummyStore } from './dummy-store';
+import { seedDemoData } from './seed-demo-data';
 
 async function bootstrap() {
   const env = validateRuntimeEnv();
   const app = await NestFactory.create(AppModule);
+
+  // Seed demo data for local development
+  if (process.env.NODE_ENV !== 'production') {
+    const dummyStore = app.get(DummyStore);
+    seedDemoData(dummyStore);
+  }
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.use(helmet());
   app.use((req: any, res: any, next: () => void) => {

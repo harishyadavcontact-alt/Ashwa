@@ -27,32 +27,27 @@ export function InviteSignupScreen({ inviteCode, onSuccess, onBack }: InviteSign
 
     setLoading(true);
     try {
-      // TODO: Replace with actual API endpoint
-      const response = await fetch('http://localhost:3000/api/invites/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: inviteCode,
-          parentPhone: phoneNumber,
-          name: childName, // Use child name for now
-          childName,
-          school,
-          pickupLat: parseFloat(pickupLat),
-          pickupLng: parseFloat(pickupLng),
-          dropLat: parseFloat(dropLat),
-          dropLng: parseFloat(dropLng),
-        }),
+      const result = await api.claimInvite({
+        code: inviteCode,
+        parentPhone: phoneNumber,
+        childName,
+        school,
+        pickupLat: parseFloat(pickupLat),
+        pickupLng: parseFloat(pickupLng),
+        dropLat: parseFloat(dropLat),
+        dropLng: parseFloat(dropLng),
       });
 
-      const result = await response.json();
       if (result.success) {
-        Alert.alert('Success!', result.message);
+        Alert.alert('Success!', result.message || 'You are now linked to your driver!');
         onSuccess(result.parent);
       } else {
-        Alert.alert('Error', result.error || 'Signup failed');
+        Alert.alert('Error', result.message || 'Signup failed');
       }
     } catch (error) {
-      Alert.alert('Error', 'Network error. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Network error or backend unreachable';
+      Alert.alert('Connection Error', errorMessage + '. Please check that the backend is running and try again.');
+      console.error('Invite claim error:', error);
     } finally {
       setLoading(false);
     }

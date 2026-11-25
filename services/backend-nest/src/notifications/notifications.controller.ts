@@ -67,4 +67,14 @@ export class NotificationsController {
       body.eventType,
     );
   }
+
+  /**
+   * TEST ENDPOINT: Create a mock trip with 10 children at same school (St. Xavier's).
+   * Used to verify multi-child alert delivery before Dad's first trip.
+   * GET /api/notifications/test/mock-trip-10-children
+   */
+  @Get('test/mock-trip-10-children')
+  async createMockTrip10Children() {
+    return this.notificationsService.createMockTrip10Children();
+  }
 }
