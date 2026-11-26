@@ -20,6 +20,7 @@ import { DiscoveryModule } from './discovery/discovery.module';
 import { StoriesModule } from './stories/stories.module';
 import { CallsModule } from './calls/calls.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { QrModule } from './qr/qr.module';
 import { PrismaModule } from './prisma.module';
 import { HealthController } from './health.controller';
 
@@ -47,6 +48,7 @@ import { HealthController } from './health.controller';
     StoriesModule,
     CallsModule,
     AttendanceModule,
+    QrModule,
   ],
   controllers: [HealthController],
 })

@@ -1222,6 +1222,30 @@ export default function App() {
   }
 
   if (screen === 'onboarding') {
+    // Skip van setup on first login - ask role only, then auto-link
+    return (
+      <SafeAreaView style={styles.page}>
+        <View style={styles.hero}>
+          <Text style={styles.kicker}>Welcome to Ashwa</Text>
+          <Text style={styles.titleLight}>Tell us your role</Text>
+        </View>
+        <View style={styles.card}>
+          <TouchableOpacity style={[styles.button, { marginBottom: 12, backgroundColor: '#1b5e20' }]} onPress={() => { setProfile({ ...profile, name: 'Dad' }); setScreen('trip'); }}>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>📦 I'm a Driver</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.button, { backgroundColor: '#0066cc' }]} onPress={() => { setProfile({ ...profile, name: 'Parent' }); setScreen('trip'); }}>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>👥 I'm a Parent</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 12, color: '#666', marginTop: 16, textAlign: 'center' }}>
+            You can update your profile later after your first trip.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'van-setup') {
+    // Deferred van setup screen - only after first trip
     return (
       <SafeAreaView style={styles.page}>
         <ScrollView contentContainerStyle={styles.stack}>

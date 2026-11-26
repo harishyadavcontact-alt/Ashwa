@@ -1,0 +1,46 @@
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m1"
+      },
+      "android": {
+        "resourceClass": "medium"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "resourceClass": "medium",
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "ios": {
+        "resourceClass": "m1",
+        "simulator": false
+      },
+      "android": {
+        "resourceClass": "large",
+        "buildType": "aab"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "1234567890",
+        "appleTeamId": "TEAM123ABC"
+      },
+      "android": {
+        "googleServiceAccountJsonPath": "./google-play-key.json",
+        "trackName": "beta"
+      }
+    }
+  }
+}
