@@ -94,43 +94,51 @@ export function ReferralShareScreen({ parentPhone, onBack }: ReferralShareScreen
         <TouchableOpacity onPress={onBack}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Share & Earn</Text>
+        <Text style={styles.title}>Earn ₹200</Text>
         <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.content}>
-        <View style={styles.earningsBox}>
-          <Text style={styles.earningsLabel}>You've earned</Text>
-          <Text style={styles.earningsAmount}>₹{stats.earned}</Text>
-          <Text style={styles.earningsSubtext}>
-            {stats.claimed} families joined • {stats.sent - stats.claimed} more to reach
-          </Text>
+        {/* Premium Gold Card - Referral Explanation */}
+        <View style={styles.premiumCard}>
+          <Text style={styles.cardTitle}>Share this code with friends.</Text>
+          <Text style={styles.cardSubtitle}>When they join & complete 3 trips, you both earn ₹200.</Text>
         </View>
 
+        {/* Referral Code Box - Prominent */}
         <View style={styles.codeSection}>
-          <Text style={styles.sectionTitle}>Your Referral Code</Text>
-          <View style={styles.codeBox}>
-            <Text style={styles.code}>{referralCode}</Text>
+          <Text style={styles.codeLabel}>CODE</Text>
+          <View style={styles.codeBoxPremium}>
+            <Text style={styles.codePremium}>{referralCode}</Text>
           </View>
+        </View>
 
-          <TouchableOpacity style={styles.copyButton} onPress={handleCopyCode}>
-            <Text style={styles.buttonText}>📋 Copy Code</Text>
+        {/* Action Buttons - Clean, Professional */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.copyButtonPremium} onPress={handleCopyCode}>
+            <Text style={styles.copyButtonText}>📋 Copy Code</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.whatsappButtonPremium} onPress={handleShareWhatsApp}>
+            <Text style={styles.whatsappButtonText}>💬 Share on WhatsApp</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.shareSection}>
-          <Text style={styles.sectionTitle}>Share on WhatsApp</Text>
-          <View style={styles.messagePreview}>
-            <Text style={styles.messageText}>{whatsappMessage}</Text>
+        {/* Stats - Referred Families */}
+        <View style={styles.statsBox}>
+          <Text style={styles.statsTitle}>Families Referred</Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Sent:</Text>
+            <Text style={styles.statValue}>{stats.sent} invites</Text>
           </View>
-
-          <TouchableOpacity style={styles.whatsappButton} onPress={handleShareWhatsApp}>
-            <Text style={styles.buttonText}>💬 Share on WhatsApp</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>💡 Each family that joins with your code earns you ₹200!</Text>
+          <View style={styles.statRow}>
+            <Text style={styles.statLabel}>Claimed:</Text>
+            <Text style={styles.statValue}>{stats.claimed} families</Text>
+          </View>
+          <View style={[styles.statRow, { borderTopWidth: 1, borderTopColor: '#1e3a8a', paddingTop: 12, marginTop: 12 }]}>
+            <Text style={styles.earnedLabel}>Total Earned:</Text>
+            <Text style={styles.earnedValue}>₹{stats.earned}</Text>
+          </View>
         </View>
       </View>
     </View>
@@ -140,7 +148,7 @@ export function ReferralShareScreen({ parentPhone, onBack }: ReferralShareScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#f9fafb',
   },
   header: {
     flexDirection: 'row',
@@ -149,116 +157,146 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    borderBottomColor: '#e5e7eb',
   },
   backButton: {
-    color: colors.accent,
+    color: '#1e3a8a',
     fontSize: 14,
     fontWeight: '600',
   },
   title: {
-    color: colors.ink,
+    color: '#111827',
     fontSize: 18,
     fontWeight: '700',
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 20,
+    gap: 20,
   },
-  earningsBox: {
-    backgroundColor: 'rgba(255, 199, 44, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ffc72c',
+  // Premium gold card with explanation
+  premiumCard: {
+    backgroundColor: '#fbbf24',
+    borderRadius: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  earningsLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  earningsAmount: {
-    color: '#ffc72c',
-    fontSize: 32,
+  cardTitle: {
+    color: '#111827',
+    fontSize: 15,
     fontWeight: '700',
-    marginTop: 4,
+    marginBottom: 8,
   },
-  earningsSubtext: {
-    color: colors.muted,
-    fontSize: 12,
-    marginTop: 4,
+  cardSubtitle: {
+    color: '#78350f',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   codeSection: {
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
   },
-  shareSection: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    color: colors.ink,
-    fontSize: 14,
+  codeLabel: {
+    color: '#6b7280',
+    fontSize: 11,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
-  codeBox: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+  codeBoxPremium: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     alignItems: 'center',
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  code: {
-    color: colors.ink,
-    fontSize: 18,
-    fontWeight: '700',
+  codePremium: {
+    color: '#fbbf24',
+    fontSize: 20,
+    fontWeight: '800',
     letterSpacing: 2,
     fontFamily: 'Courier New',
   },
-  messagePreview: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: 12,
-    minHeight: 60,
+  actionButtons: {
+    gap: 10,
   },
-  messageText: {
-    color: colors.ink,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  copyButton: {
-    backgroundColor: '#34AF23',
-    borderRadius: 8,
-    paddingVertical: 12,
+  copyButtonPremium: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  whatsappButton: {
-    backgroundColor: '#25D366',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
+  copyButtonText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '700',
   },
-  infoBox: {
-    backgroundColor: 'rgba(50, 180, 255, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#32b4ff',
-    padding: 12,
+  whatsappButtonPremium: {
+    backgroundColor: '#25D366',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    shadowColor: '#25D366',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  infoText: {
-    color: colors.ink,
+  whatsappButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  statsBox: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  statsTitle: {
+    color: '#111827',
     fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  statLabel: {
+    color: '#6b7280',
+    fontSize: 12,
     fontWeight: '500',
+  },
+  statValue: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  earnedLabel: {
+    color: '#6b7280',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  earnedValue: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
