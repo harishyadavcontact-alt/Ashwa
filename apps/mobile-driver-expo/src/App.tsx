@@ -29,6 +29,10 @@ import { OwnerDashboard } from './OwnerDashboard';
 import { InfoTip } from './InfoTip';
 import { MoreMenu } from './MoreMenu';
 import { SettingsScreen } from './SettingsScreen';
+import { LevelProgressionScreen } from './LevelProgressionScreen';
+import { LevelUpScreen } from './LevelUpScreen';
+import { NextLevelCard } from './NextLevelCard';
+import { BadgeDisplay } from './BadgeDisplay';
 import { EarningsBreakdownScreen } from './EarningsBreakdownScreen';
 import { LoanManagementScreen } from './LoanManagementScreen';
 import { ReferralsScreen } from './ReferralsScreen';
@@ -37,7 +41,7 @@ import { SupportScreen } from './SupportScreen';
 import { PrivacyScreen } from './PrivacyScreen';
 import { colors } from './theme';
 
-type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history' | 'owner-dashboard' | 'more' | 'settings' | 'earnings' | 'my-referrals' | 'loan-status' | 'documents' | 'support' | 'privacy';
+type Screen = 'auth' | 'onboarding' | 'inbox' | 'trip' | 'jobs' | 'apply-jobs' | 'team' | 'payroll' | 'post-job' | 'success-stories' | 'leaderboard' | 'services' | 'create-service' | 'verification' | 'admin-verification' | 'analytics' | 'trip-history' | 'owner-dashboard' | 'more' | 'settings' | 'earnings' | 'my-referrals' | 'loan-status' | 'documents' | 'support' | 'privacy' | 'progression' | 'level-up';
 
 const SESSION_KEY = 'ashwa.driver.session';
 
