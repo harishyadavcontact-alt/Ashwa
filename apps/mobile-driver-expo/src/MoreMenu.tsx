@@ -19,6 +19,7 @@ interface MoreMenuProps {
 export function MoreMenu({ role, onNavigate, onLogout, userName = 'User' }: MoreMenuProps) {
   const menuItems = role === 'driver'
     ? [
+        { label: '⭐ Your Progress 🚀', screen: 'progression' },
         { label: 'Settings', screen: 'settings' },
         { label: 'My Earnings', screen: 'earnings' },
         { label: 'My Referrals', screen: 'my-referrals' },

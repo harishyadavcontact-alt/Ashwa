@@ -1374,6 +1374,28 @@ export default function App() {
           </View>
         </Modal>
 
+        {/* Badges Display */}
+        <BadgeDisplay
+          badges={[
+            { id: '1', emoji: '✓', label: 'Verified', earned: true },
+            { id: '2', emoji: '💰', label: 'Level 2', earned: true },
+            { id: '3', emoji: '🚗', label: 'Van Owner', earned: false },
+          ]}
+        />
+
+        {/* Next Level Card - Prominent CTA */}
+        <NextLevelCard
+          currentLevel={2}
+          nextLevel={3}
+          nextTitle="Owner Ready"
+          nextBadge="💰"
+          milestone="Serve 50 families to unlock loan"
+          progress={25}
+          familiesRemaining={38}
+          tripsRemaining={12}
+          onViewPath={() => setScreen('progression')}
+        />
+
         <ScrollView contentContainerStyle={styles.stack}>
           <Text style={styles.titleDark}>Incoming requests</Text>
           <Text style={styles.bodyDark}>Accept only when seat capacity, institution fit, and route reality line up.</Text>
@@ -1961,6 +1983,24 @@ export default function App() {
   if (screen === 'privacy') {
     return (
       <PrivacyScreen onBack={() => setScreen('more')} />
+    );
+  }
+
+  if (screen === 'progression') {
+    return (
+      <LevelProgressionScreen />
+    );
+  }
+
+  if (screen === 'level-up') {
+    return (
+      <LevelUpScreen
+        level={2}
+        title="Verified Driver"
+        badge="✓"
+        unlockedFeature="Loan eligibility active - Borrow up to ₹5L"
+        onContinue={() => setScreen('trip')}
+      />
     );
   }
 
