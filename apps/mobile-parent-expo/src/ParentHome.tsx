@@ -876,33 +876,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Premium Swiggy-style Bottom Sheet
+  // Premium Swiggy-style Bottom Sheet (Dark blue + gold)
   swiggyBottomSheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: colors.panel,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    gap: 12,
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    shadowColor: '#1e3a8a',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    gap: 16,
   },
 
   driverCardPremium: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#1e3a8a',
+    borderRadius: 20,
+    padding: 20,
     gap: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderWidth: 2,
+    borderColor: '#fbbf24',
   },
 
   driverHeaderRow: {
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
   driverAvatarContainer: {
     width: 56,
     height: 56,
-    backgroundColor: '#10b981',
+    backgroundColor: '#fbbf24',
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   },
 
   driverNameBold: {
-    color: colors.ink,
+    color: '#ffffff',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.5,
@@ -943,13 +943,13 @@ const styles = StyleSheet.create({
   },
 
   verifiedCheckmark: {
-    color: '#10b981',
+    color: '#fbbf24',
     fontSize: 12,
     fontWeight: '800',
   },
 
   ratingText: {
-    color: colors.muted,
+    color: '#fbbf24',
     fontSize: 12,
     fontWeight: '600',
   },
