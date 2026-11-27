@@ -315,93 +315,94 @@ export function ParentHome({
                 longitude: demoMode ? demoDemoLoc.longitude : driverLoc.longitude,
               }}
               title={demoMode ? "Demo Van" : "Driver"}
-              pinColor={demoMode ? '#3b82f6' : (isVerified ? colors.accent : '#ff9800')}
+              pinColor={demoMode ? '#3b82f6' : (isVerified ? '#10b981' : '#ff9800')}
             />
           </MapView>
         ) : (
           <View style={styles.mapPlaceholder}>
-            <Text style={styles.placeholderText}>Map activates on trip start</Text>
-            <Text style={styles.placeholderSubText}>Tap the 📍 below to open full tracking</Text>
+            <Text style={styles.placeholderText}>Waiting for trip to start</Text>
           </View>
         )}
 
-        {/* Bottom-Left: Driver Name + Verified Badge */}
-        {assignment?.driver && (
-          <View style={styles.overlayBottomLeft}>
-            <View style={styles.driverBadge}>
-              <Text style={styles.driverName}>{driverName}</Text>
-              {isVerified && <Text style={styles.verifiedBadge}>✓ VERIFIED</Text>}
-            </View>
-          </View>
-        )}
-
-        {/* Bottom-Center: Child Status */}
-        {primaryChild && (
-          <View style={styles.overlayBottomCenter}>
-            <View style={styles.childStatusBadge}>
-              <Text style={styles.childName}>{primaryChild.name}</Text>
-              <Text style={styles.childStatus}>
-                {demoMode ? demoStatus : getChildStatus()}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Bottom-Right: ETA */}
+        {/* Premium Bottom Sheet (Swiggy-style) */}
         {trip?.status === 'ACTIVE' && (
-          <View style={styles.overlayBottomRight}>
-            <View style={styles.etaBadge}>
-              <Text style={styles.etaLabel}>ETA</Text>
-              <Text style={styles.etaTime}>{getETA()}</Text>
+          <View style={styles.swiggyBottomSheet}>
+            {/* Driver Card (Premium) */}
+            <View style={styles.driverCardPremium}>
+              {/* Driver Avatar + Info */}
+              <View style={styles.driverHeaderRow}>
+                <View style={styles.driverAvatarContainer}>
+                  <Text style={styles.driverAvatar}>🚗</Text>
+                </View>
+                <View style={styles.driverInfoColumn}>
+                  <Text style={styles.driverNameBold}>{driverName}</Text>
+                  <View style={styles.ratingRow}>
+                    {isVerified && <Text style={styles.verifiedCheckmark}>✓</Text>}
+                    <Text style={styles.ratingText}>⭐ 4.9 | Verified</Text>
+                  </View>
+                </View>
+                {/* Earnings Badge */}
+                <View style={styles.earningsBadge}>
+                  <Text style={styles.earningsBadgeText}>₹{referralEarnings}</Text>
+                  <Text style={styles.earningsBadgeLabel}>earned</Text>
+                </View>
+              </View>
+
+              {/* Trip Status (Celebratory) */}
+              <View style={styles.tripStatusRow}>
+                <Text style={styles.tripStatusIcon}>📍</Text>
+                <View>
+                  <Text style={styles.tripStatusMain}>
+                    {demoMode ? demoStatus : getChildStatus()}
+                  </Text>
+                  <Text style={styles.tripStatusSub}>
+                    {primaryChild?.name} · {getETA()}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Action Buttons (Premium) */}
+              <View style={styles.actionButtonsRow}>
+                <TouchableOpacity style={styles.actionButtonCall} onPress={onCallDriver}>
+                  <Text style={styles.actionButtonIcon}>📞</Text>
+                  <Text style={styles.actionButtonLabel}>CALL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButtonMore}>
+                  <Text style={styles.actionButtonIcon}>⋮</Text>
+                  <Text style={styles.actionButtonLabel}>MORE</Text>
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Referral Card (Prominent) */}
+            {referralEarnings < 2000 && (
+              <View style={styles.referralCardProminent}>
+                <Text style={styles.referralEmoji}>💰</Text>
+                <Text style={styles.referralText}>Earn ₹200 per friend who joins</Text>
+                <TouchableOpacity
+                  style={styles.referralShareButton}
+                  onPress={onReferrals}
+                >
+                  <Text style={styles.referralShareButtonText}>Share Now</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
-        {/* Top-Left: Child Selector (if 2+ kids) */}
-        {children.length > 1 && (
-          <View style={styles.overlayTopLeft}>
-            <TouchableOpacity style={styles.childSelector}>
-              <Text style={styles.childSelectorText}>
-                {primaryChild?.name || 'Select child'} ▼
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* SOS Button (Red, Always Visible, Top-Right) */}
+        <TouchableOpacity
+          style={styles.sosButtonPremium}
+          onPress={onEmergency}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.sosButtonTextPremium}>🆘</Text>
+        </TouchableOpacity>
 
-        {/* Top-Right: Info Button + SOS Button */}
-        <View style={styles.topRightButtons}>
+        {/* Demo Ride Button */}
+        {!demoHasRun && !trip?.status && (
           <TouchableOpacity
-            style={styles.infoButton}
-            onPress={() => setShowInfoTip(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.infoButtonText}>ⓘ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.sosButton} onPress={onEmergency} activeOpacity={0.8}>
-            <Text style={styles.sosButtonText}>🚨 SOS</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tracking Button */}
-        {trip?.status === 'ACTIVE' && (
-          <TouchableOpacity style={styles.trackingButton} onPress={onTrackingOpen}>
-            <Text style={styles.trackingButtonText}>📍 TRACK</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Location Update Indicator */}
-        {trip?.status === 'ACTIVE' && (
-          <View style={styles.updateIndicator}>
-            <Text style={styles.updateText}>
-              Updated {Math.round((Date.now() - locationLastUpdated.getTime()) / 1000)}s ago
-            </Text>
-          </View>
-        )}
-
-        {/* Demo Ride Button - First 5 min, shows once */}
-        {!demoHasRun && (
-          <TouchableOpacity
-            style={styles.demoButton}
+            style={styles.demoButtonPremium}
             onPress={() => {
               setDemoMode(true);
               setDemoStartTime(Date.now());
@@ -409,38 +410,10 @@ export function ParentHome({
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.demoButtonText}>DEMO RIDE</Text>
+            <Text style={styles.demoButtonTextPremium}>DEMO RIDE</Text>
           </TouchableOpacity>
         )}
       </View>
-
-      {/* Attendance Counter (Live Update) */}
-      {monthlyAttendance && (
-        <View style={styles.attendanceBar}>
-          <View style={styles.attendanceContent}>
-            <Text style={styles.attendanceLabel}>ATTENDANCE</Text>
-            <View style={styles.attendanceMetric}>
-              <Text style={styles.attendanceNumber}>{attendedDays}</Text>
-              <Text style={styles.attendanceTotal}>/{totalDays}</Text>
-            </View>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.min(attendancePercentage, 100)}%` },
-                ]}
-              />
-            </View>
-          </View>
-
-          {referralEarnings > 0 && (
-            <View style={styles.earningsQuick}>
-              <Text style={styles.earningsLabel}>₹{referralEarnings}</Text>
-              <Text style={styles.earningsText}>earned</Text>
-            </View>
-          )}
-        </View>
-      )}
 
       {/* Action Bar (20% of screen) */}
       <ActionBar
@@ -821,5 +794,245 @@ const styles = StyleSheet.create({
     color: colors.panel,
     fontSize: 14,
     fontWeight: '700',
+  },
+
+  // Premium Swiggy-style Bottom Sheet
+  swiggyBottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.panel,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    gap: 12,
+  },
+
+  driverCardPremium: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    padding: 16,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+
+  driverHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  driverAvatarContainer: {
+    width: 56,
+    height: 56,
+    backgroundColor: '#10b981',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  driverAvatar: {
+    fontSize: 28,
+  },
+
+  driverInfoColumn: {
+    flex: 1,
+    gap: 4,
+  },
+
+  driverNameBold: {
+    color: colors.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  verifiedCheckmark: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  ratingText: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  earningsBadge: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+
+  earningsBadgeText: {
+    color: '#92400e',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  earningsBadgeLabel: {
+    color: '#92400e',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+
+  tripStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10b981',
+  },
+
+  tripStatusIcon: {
+    fontSize: 20,
+  },
+
+  tripStatusMain: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  tripStatusSub: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  actionButtonCall: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  actionButtonMore: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+
+  actionButtonIcon: {
+    fontSize: 18,
+  },
+
+  actionButtonLabel: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  referralCardProminent: {
+    backgroundColor: '#fef3c7',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+
+  referralEmoji: {
+    fontSize: 24,
+  },
+
+  referralText: {
+    color: '#92400e',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  referralShareButton: {
+    backgroundColor: '#92400e',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+
+  referralShareButtonText: {
+    color: '#fef3c7',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  sosButtonPremium: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 56,
+    height: 56,
+    backgroundColor: '#dc2626',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 20,
+  },
+
+  sosButtonTextPremium: {
+    fontSize: 24,
+  },
+
+  demoButtonPremium: {
+    position: 'absolute',
+    bottom: 180,
+    left: 16,
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#3b82f6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 10,
+  },
+
+  demoButtonTextPremium: {
+    color: colors.panel,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
