@@ -14,6 +14,7 @@ import MapView, { Marker, AnimatedRegion } from 'react-native-maps';
 import { ActionBar } from './ActionBar';
 import { ReferralCard } from './ReferralCard';
 import { InfoTip } from './InfoTip';
+import { NotificationBanner } from './NotificationBanner';
 import { colors } from './theme';
 import type {
   DriverServiceSummary,
@@ -78,6 +79,16 @@ export function ParentHome({
   const [demoStatus, setDemoStatus] = useState('');
   const [showInfoTip, setShowInfoTip] = useState(false);
   const [demoHasRun, setDemoHasRun] = useState(false);
+  const [notification, setNotification] = useState<{
+    type: 'trip-start' | 'arrived' | 'boarded' | 'school-arrival' | 'trip-complete';
+    driverName: string;
+    childName: string;
+    schoolName?: string;
+    eta?: number;
+    arrivalTime?: string;
+    duration?: string;
+    distance?: string;
+  } | null>(null);
   const [locationLastUpdated, setLocationLastUpdated] = useState(new Date());
   const mapRef = useRef<MapView>(null);
   const animatedRegion = useRef(
@@ -238,6 +249,42 @@ export function ParentHome({
 
   return (
     <SafeAreaView style={styles.page}>
+      {/* Premium Notifications */}
+      {notification && (
+        <NotificationBanner
+          type={notification.type}
+          driverName={notification.driverName}
+          childName={notification.childName}
+          schoolName={notification.schoolName}
+          eta={notification.eta}
+          arrivalTime={notification.arrivalTime}
+          duration={notification.duration}
+          distance={notification.distance}
+          onDismiss={() => setNotification(null)}
+          onAction={() => {
+            if (notification.type === 'arrived' || notification.type === 'boarded') {
+              onCallDriver?.();
+            } else if (notification.type === 'school-arrival') {
+              // Rate driver action
+            }
+          }}
+        />
+      )}
+
+      {/* Premium Header with Branding & Trust Signals */}
+      <View style={styles.premiumHeader}>
+        <View style={styles.headerContent}>
+          <Text style={styles.brandName}>Ashwa Safe Rides</Text>
+          <View style={styles.trustSignals}>
+            <Text style={styles.trustText}>✓ Verified Driver</Text>
+            <Text style={styles.trustDot}>•</Text>
+            <Text style={styles.trustText}>⭐ {attendancePercentage}% Safe</Text>
+            <Text style={styles.trustDot}>•</Text>
+            <Text style={styles.trustText}>500+ families</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Info Tip */}
       <InfoTip
         tip="Live location updates every 10s"
@@ -435,14 +482,47 @@ const mapHeight = screenHeight * 0.8; // 80% for map
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: '#1e3a8a', // Dark blue premium background
   },
+
+  // Premium Header with Branding
+  premiumHeader: {
+    backgroundColor: '#1e3a8a',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#fbbf24',
+  },
+  headerContent: {
+    gap: 6,
+  },
+  brandName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  trustSignals: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  trustText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fbbf24', // Gold accents
+  },
+  trustDot: {
+    fontSize: 10,
+    color: '#fbbf24',
+  },
+
   mapContainer: {
-    height: mapHeight,
+    height: Dimensions.get('window').height * 0.65, // 65% for map (golden ratio)
     position: 'relative',
     overflow: 'hidden',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   map: {
     ...StyleSheet.absoluteFillObject,

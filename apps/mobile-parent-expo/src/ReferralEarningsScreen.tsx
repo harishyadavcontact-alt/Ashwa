@@ -36,78 +36,65 @@ export function ReferralEarningsScreen({
         <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.titleDark}>Referral Earnings</Text>
+        <Text style={styles.titleDark}>Your Earnings</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.stack}>
-        {/* Main Earnings Card */}
-        <View style={styles.highlightCard}>
-          <Text style={styles.highlightLabel}>Total earned</Text>
-          <Text style={styles.highlightAmount}>{formatCurrency(totalEarned)}</Text>
-          <Text style={styles.highlightDetail}>from {familiesJoined} families</Text>
-        </View>
-
-        {/* Stats Overview */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{invitesSent}</Text>
-            <Text style={styles.statLabel}>Invites sent</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{familiesJoined}</Text>
-            <Text style={styles.statLabel}>Families joined</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{formatCurrency(potentialEarnings)}</Text>
-            <Text style={styles.statLabel}>Potential pending</Text>
+        {/* GOLDEN RATIO: Main Earnings (70% visual weight) */}
+        <View style={styles.premiumEarningsCard}>
+          <Text style={styles.earningsLabel}>THIS MONTH</Text>
+          <Text style={styles.largeAmount}>{formatCurrency(totalEarned)}</Text>
+          <View style={styles.earningsBreakdown}>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>This Month</Text>
+              <Text style={styles.breakdownValue}>{formatCurrency(totalEarned)}</Text>
+            </View>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Next Month (Pending)</Text>
+              <Text style={styles.breakdownValue}>{formatCurrency(potentialEarnings)}</Text>
+            </View>
+            <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#1e3a8a', paddingTopVertical: 12, marginTop: 12 }]}>
+              <Text style={styles.totalLabel}>Total Potential</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totalEarned + potentialEarnings)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* How It Works */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How referrals work</Text>
-          <View style={styles.card}>
-            <Text style={styles.cardStep}>1. Share your code with friends</Text>
-            <Text style={styles.cardStep}>2. They sign up using your code</Text>
-            <Text style={styles.cardStep}>3. Get ₹200 when their family completes first trip</Text>
-            <Text style={styles.cardStep}>4. Bonus unlocks: Earn extra for active referrals</Text>
+        {/* GOLDEN RATIO: Referred Families (20% weight) */}
+        <View style={styles.referredFamiliesSection}>
+          <Text style={styles.sectionTitle}>Families You've Referred</Text>
+          <View style={styles.familyCard}>
+            <View style={styles.familyRow}>
+              <View style={styles.familyInfo}>
+                <Text style={styles.familyName}>Priya's Family</Text>
+                <Text style={styles.familyStatus}>✓ Joined 15 days ago</Text>
+              </View>
+              <Text style={styles.familyEarnings}>{formatCurrency(200)}</Text>
+            </View>
+          </View>
+          <View style={styles.familyCard}>
+            <View style={styles.familyRow}>
+              <View style={styles.familyInfo}>
+                <Text style={styles.familyName}>Ahmed's Family</Text>
+                <Text style={styles.familyStatus}>⏳ 2 days remaining (3-trip trial)</Text>
+              </View>
+              <Text style={styles.familyPotential}>{formatCurrency(200)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Detailed Stats */}
-        <TouchableOpacity
-          style={styles.expandButton}
-          onPress={() => setExpandedStats(!expandedStats)}
-        >
-          <Text style={styles.expandButtonText}>
-            {expandedStats ? '− Hide' : '+ Show'} detailed breakdown
-          </Text>
-        </TouchableOpacity>
-
-        {expandedStats && (
-          <View style={styles.section}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Invites sent</Text>
-              <Text style={styles.detailValue}>{invitesSent}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Signed up</Text>
-              <Text style={styles.detailValue}>{familiesJoined}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Conversion rate</Text>
-              <Text style={styles.detailValue}>
-                {invitesSent > 0 ? ((familiesJoined / invitesSent) * 100).toFixed(0) : 0}%
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Average per family</Text>
-              <Text style={styles.detailValue}>
-                {familiesJoined > 0 ? formatCurrency(totalEarned / familiesJoined) : '₹0'}
-              </Text>
-            </View>
-          </View>
-        )}
+        {/* GOLDEN RATIO: Action Buttons (10% weight) */}
+        <View style={styles.actionButtonsSection}>
+          <TouchableOpacity style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>📋 Copy Referral Code</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>📱 Share on WhatsApp</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.withdrawButton}>
+            <Text style={styles.withdrawButtonText}>💳 Withdraw to Bank Account</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -118,136 +105,172 @@ export function ReferralEarningsScreen({
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: '#f9fafb',
   },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.line,
+    borderBottomColor: '#e5e7eb',
   },
   backButton: {
-    color: colors.accent,
+    color: '#1e3a8a',
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
   },
   titleDark: {
-    color: colors.ink,
+    color: '#111827',
     fontSize: 28,
     fontWeight: '700',
   },
   stack: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    gap: 24,
+    gap: 20,
   },
-  highlightCard: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    backgroundColor: colors.accent + '15',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.accent + '30',
+  // GOLDEN RATIO: 70% visual weight for earnings
+  premiumEarningsCard: {
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    backgroundColor: '#fbbf24',
+    borderRadius: 16,
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  highlightLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '500',
+  earningsLabel: {
+    color: '#78350f',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
     marginBottom: 8,
   },
-  highlightAmount: {
-    color: colors.ink,
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 4,
+  largeAmount: {
+    color: '#111827',
+    fontSize: 56,
+    fontWeight: '800',
+    lineHeight: 64,
+    marginBottom: 20,
   },
-  highlightDetail: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statsGrid: {
-    flexDirection: 'row',
+  earningsBreakdown: {
     gap: 12,
-    justifyContent: 'space-between',
-  },
-  statCard: {
-    flex: 1,
-    paddingVertical: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    paddingVertical: 12,
     paddingHorizontal: 12,
-    backgroundColor: colors.panel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    alignItems: 'center',
-    gap: 4,
+    borderRadius: 10,
   },
-  statValue: {
-    color: colors.ink,
-    fontSize: 20,
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownLabel: {
+    color: '#78350f',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  breakdownValue: {
+    color: '#111827',
+    fontSize: 14,
     fontWeight: '700',
   },
-  statLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '500',
-    textAlign: 'center',
+  totalLabel: {
+    color: '#78350f',
+    fontSize: 13,
+    fontWeight: '700',
   },
-  section: {
+  totalValue: {
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  // GOLDEN RATIO: 20% weight for referred families
+  referredFamiliesSection: {
     gap: 12,
   },
   sectionTitle: {
-    color: colors.ink,
-    fontSize: 16,
+    color: '#111827',
+    fontSize: 15,
     fontWeight: '700',
+    marginBottom: 4,
   },
-  card: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: colors.panel,
-    borderRadius: 8,
+  familyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: colors.line,
-    gap: 8,
+    borderColor: '#e5e7eb',
   },
-  cardStep: {
-    color: colors.ink,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '400',
-  },
-  expandButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: colors.accent + '10',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.accent + '30',
-  },
-  expandButtonText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  detailRow: {
+  familyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: colors.panel,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.line,
   },
-  detailLabel: {
-    color: colors.muted,
-    fontSize: 13,
+  familyInfo: {
+    flex: 1,
+  },
+  familyName: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  familyStatus: {
+    color: '#6b7280',
+    fontSize: 12,
     fontWeight: '500',
   },
-  detailValue: {
-    color: colors.ink,
+  familyEarnings: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  familyPotential: {
+    color: '#f97316',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  // GOLDEN RATIO: 10% weight for action buttons
+  actionButtonsSection: {
+    gap: 10,
+    marginTop: 10,
+  },
+  primaryButton: {
+    backgroundColor: '#1e3a8a',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    backgroundColor: '#fbbf24',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: '#111827',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  withdrawButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  withdrawButtonText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '700',
   },
